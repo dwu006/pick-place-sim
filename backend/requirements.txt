@@ -7,3 +7,4 @@ aiosqlite==0.20.0
 python-multipart==0.0.12
 websockets==13.1
 python-dotenv==1.0.1
+google-genai==1.14.0

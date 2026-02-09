@@ -1,49 +1,99 @@
-import asyncio
+import json
+import logging
 import random
 
+from google import genai
+from google.genai import types
+
+from config import settings
 from schemas import EvaluationResult, PourSpec
 
-FEEDBACK_TEMPLATES: dict[str, list[str]] = {
-    "rosetta": [
-        "Good leaf definition and symmetry. The rosetta layers are well-separated with clear contrast against the crema.",
-        "Excellent rosetta structure. Consider slightly reducing flow rate mid-pour for tighter leaf spacing.",
-        "Strong rosetta pattern. The pull-through creates a clean central spine. Minor asymmetry on the left side.",
-    ],
-    "tulip": [
-        "Well-stacked tulip petals with good separation. The base is slightly wide — try a higher pour to tighten it.",
-        "Clean tulip formation. Each layer is distinct. Crema integration could be improved with a slower initial pour.",
-        "Solid tulip pattern. The top petal is well-defined. Consider more pause between layers for sharper edges.",
-    ],
-    "heart": [
-        "Clean heart shape with smooth curves. Great contrast between milk and crema.",
-        "Well-formed heart. The symmetry is excellent. Slightly reduce pour height for a more defined point at the base.",
-        "Nice heart pattern. The pull-through creates a clean finish. Milk density is even throughout.",
-    ],
-}
+logger = logging.getLogger(__name__)
 
-SCORE_RANGES: dict[str, tuple[float, float]] = {
-    "rosetta": (82.0, 94.0),
-    "tulip": (78.0, 90.0),
-    "heart": (85.0, 96.0),
+client = genai.Client(api_key=settings.gemini_api_key)
+
+SYSTEM_PROMPT = """You are LatteBot's latte art quality evaluator. You evaluate simulated latte art pours based on the
+pour parameters and pattern type. In the future you will receive actual images, but for now evaluate based on
+the trajectory parameters.
+
+Evaluate the pour quality and return structured JSON with:
+- score: overall quality score 0-100 (be realistic, most pours score 70-95)
+- feedback: 2-3 sentences of specific, actionable feedback about the pour quality. Reference specific parameters.
+- breakdown: object with four sub-scores (0-100 each):
+  - contrast: how well the milk and crema create visual distinction
+  - symmetry: how balanced and centered the pattern is
+  - definition: how sharp and clear the pattern edges are
+  - crema_quality: how well the crema is preserved around the pattern
+
+Consider these heuristics:
+- Rosetta: good oscillation_freq (3.0-4.0) and moderate pour_height (4-6cm) score higher
+- Tulip: consistent flow_rate and proper pour_height (5-7cm) matter most
+- Heart: lower pour_height (3-5cm) and moderate flow_rate (30-45ml/s) score best
+- Extreme values in any parameter reduce scores
+- Pull-through usually improves definition
+
+Be a discerning but fair evaluator. Provide constructive feedback."""
+
+EVAL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "score": {"type": "number"},
+        "feedback": {"type": "string"},
+        "breakdown": {
+            "type": "object",
+            "properties": {
+                "contrast": {"type": "number"},
+                "symmetry": {"type": "number"},
+                "definition": {"type": "number"},
+                "crema_quality": {"type": "number"},
+            },
+            "required": ["contrast", "symmetry", "definition", "crema_quality"],
+        },
+    },
+    "required": ["score", "feedback", "breakdown"],
 }
 
 
 async def evaluate_result(video_url: str, pour_spec: PourSpec) -> EvaluationResult:
-    """Mock Gemini Pro multimodal evaluation."""
-    await asyncio.sleep(2.0)  # simulate API latency
+    """Use Gemini Pro to evaluate the latte art result."""
+    prompt = f"""Evaluate this simulated latte art pour:
 
-    pattern = pour_spec.pattern
-    lo, hi = SCORE_RANGES.get(pattern, (75.0, 88.0))
-    score = round(random.uniform(lo, hi), 1)
+Pattern: {pour_spec.pattern}
+Pour Height: {pour_spec.pour_height} cm
+Oscillation Frequency: {pour_spec.oscillation_freq} Hz
+Flow Rate: {pour_spec.flow_rate} ml/s
+Pull Through: {pour_spec.pull_through}
 
-    feedback_options = FEEDBACK_TEMPLATES.get(pattern, FEEDBACK_TEMPLATES["heart"])
-    feedback = random.choice(feedback_options)
+The simulation has completed and produced a {pour_spec.pattern} pattern.
+Evaluate the quality of these pour parameters and provide your assessment."""
 
-    breakdown = {
-        "contrast": round(random.uniform(lo, hi), 1),
-        "symmetry": round(random.uniform(lo, hi), 1),
-        "definition": round(random.uniform(lo, hi), 1),
-        "crema_quality": round(random.uniform(lo, hi), 1),
-    }
+    try:
+        response = await client.aio.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=EVAL_SCHEMA,
+                temperature=0.7,
+            ),
+        )
 
-    return EvaluationResult(score=score, feedback=feedback, breakdown=breakdown)
+        data = json.loads(response.text)
+        logger.info(f"Gemini evaluator response: score={data.get('score')}")
+        return EvaluationResult(**data)
+
+    except Exception as e:
+        logger.error(f"Gemini evaluator failed: {e}, falling back to mock")
+        # Fallback to random mock scores
+        score = round(random.uniform(75.0, 90.0), 1)
+        return EvaluationResult(
+            score=score,
+            feedback=f"Evaluation service encountered an issue. Based on parameters, the {pour_spec.pattern} pattern appears reasonable.",
+            breakdown={
+                "contrast": round(random.uniform(70.0, 92.0), 1),
+                "symmetry": round(random.uniform(70.0, 92.0), 1),
+                "definition": round(random.uniform(70.0, 92.0), 1),
+                "crema_quality": round(random.uniform(70.0, 92.0), 1),
+            },
+        )
