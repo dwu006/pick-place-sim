@@ -1,53 +1,72 @@
+"""
+Gemini generates the full pick-place plan upfront (structured output).
+Shows AI reasoning/planning while keeping execution fast and deterministic.
+"""
 import json
 import logging
-from typing import Optional
+from typing import List
 
 from google import genai
 from google.genai import types
 
 from config import settings
-from schemas import PourSpec
+from schemas import PickListItem
 
 logger = logging.getLogger(__name__)
 
 client = genai.Client(api_key=settings.gemini_api_key)
 
-SYSTEM_PROMPT = """You are LatteBot's pour planning AI. Given a natural language description of a latte art pattern,
-output the optimal pour parameters as structured JSON.
-
-Parameters:
-- pattern: one of "rosetta", "tulip", "heart", or a custom name (string)
-- pour_height: height of pitcher above cup in cm (2.0-10.0). Lower = more detail, higher = wider spread.
-- oscillation_freq: side-to-side frequency in Hz (0.0-6.0). 0 for no oscillation (heart/tulip). Higher for rosetta layers.
-- flow_rate: milk flow rate in ml/s (20.0-80.0). Controls density and spread.
-- pull_through: whether to pull through the pattern at the end (boolean). Usually true.
-
-Guidelines:
-- Rosetta: oscillation_freq 2.5-4.5, pour_height 4-6, flow_rate 35-55, pull_through true
-- Tulip: oscillation_freq 0, pour_height 5-7, flow_rate 40-60, pull_through true (push-back technique)
-- Heart: oscillation_freq 0, pour_height 3-5, flow_rate 30-50, pull_through true
-- Adjust based on user descriptors like "tight", "wide", "high contrast", "delicate", etc.
-
-Respond ONLY with valid JSON matching the schema. No extra text."""
-
-POUR_SPEC_SCHEMA = {
+PLAN_SCHEMA = {
     "type": "object",
     "properties": {
-        "pattern": {"type": "string"},
-        "pour_height": {"type": "number"},
-        "oscillation_freq": {"type": "number"},
-        "flow_rate": {"type": "number"},
-        "pull_through": {"type": "boolean"},
+        "steps": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "step": {
+                        "type": "string",
+                        "enum": ["move_to_shelf", "pick", "move_to_delivery", "place"],
+                    },
+                    "item_id": {"type": "string"},
+                    "message": {"type": "string"},
+                },
+                "required": ["step", "item_id", "message"],
+            },
+        },
+        "reasoning": {
+            "type": "string",
+            "description": "Brief explanation of the plan strategy",
+        },
     },
-    "required": ["pattern", "pour_height", "oscillation_freq", "flow_rate", "pull_through"],
+    "required": ["steps", "reasoning"],
 }
 
+SYSTEM_PROMPT = """You are a robot task planner for a mini store pick-and-place system.
 
-async def plan_pour(nl_input: str, preset: Optional[str] = None) -> PourSpec:
-    """Use Gemini Flash to parse natural language into pour specification."""
-    prompt = f"User request: {nl_input}"
-    if preset:
-        prompt += f"\nPreset pattern selected: {preset}"
+Given an order (list of items and quantities), generate a complete execution plan as a JSON array of steps.
+
+Each step must be one of:
+- "move_to_shelf": Move robot arm to shelf position for an item
+- "pick": Grasp/pick the item from shelf
+- "move_to_delivery": Move robot arm to delivery area in front of user
+- "place": Release/place the item in delivery area
+
+Rules:
+- For each item, you must execute: move_to_shelf → pick → move_to_delivery → place (in that order)
+- Repeat this 4-step sequence for each unit of each item
+- Example: 2 apples + 1 water = [move_to_shelf(apple), pick(apple), move_to_delivery(apple), place(apple), move_to_shelf(apple), pick(apple), move_to_delivery(apple), place(apple), move_to_shelf(water), pick(water), move_to_delivery(water), place(water)]
+
+Generate a complete plan with all steps. Include a brief "reasoning" field explaining your strategy."""
+
+
+async def plan_pick_place_sequence(pick_list: List[PickListItem]) -> dict:
+    """
+    Use Gemini to generate the full pick-place plan upfront.
+    Returns: {"steps": [{"step": str, "item_id": str, "message": str}, ...], "reasoning": str}
+    """
+    pick_list_str = json.dumps([{"item_id": p.item_id, "quantity": p.quantity} for p in pick_list])
+    prompt = f"Order to fulfill:\n{pick_list_str}\n\nGenerate the complete execution plan."
 
     try:
         response = await client.aio.models.generate_content(
@@ -56,22 +75,23 @@ async def plan_pour(nl_input: str, preset: Optional[str] = None) -> PourSpec:
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 response_mime_type="application/json",
-                response_schema=POUR_SPEC_SCHEMA,
-                temperature=0.3,
+                response_schema=PLAN_SCHEMA,
+                temperature=0.2,
             ),
         )
-
-        data = json.loads(response.text)
-        logger.info(f"Gemini planner response: {data}")
-        return PourSpec(**data)
-
+        plan = json.loads(response.text)
+        logger.info("Gemini plan: %d steps, reasoning: %s", len(plan.get("steps", [])), plan.get("reasoning", "")[:100])
+        return plan
     except Exception as e:
-        logger.error(f"Gemini planner failed: {e}, falling back to defaults")
-        # Fallback to sensible defaults
-        pattern = preset or "heart"
-        defaults = {
-            "rosetta": PourSpec(pattern="rosetta", pour_height=5.0, oscillation_freq=3.5, flow_rate=45.0, pull_through=True),
-            "tulip": PourSpec(pattern="tulip", pour_height=6.0, oscillation_freq=0.0, flow_rate=50.0, pull_through=True),
-            "heart": PourSpec(pattern="heart", pour_height=4.5, oscillation_freq=0.0, flow_rate=40.0, pull_through=True),
-        }
-        return defaults.get(pattern, defaults["heart"])
+        logger.error("Gemini planner failed: %s", e)
+        # Fallback: generate plan deterministically
+        steps = []
+        for item in pick_list:
+            for _ in range(item.quantity):
+                steps.extend([
+                    {"step": "move_to_shelf", "item_id": item.item_id, "message": f"Moving to shelf for {item.item_id}"},
+                    {"step": "pick", "item_id": item.item_id, "message": f"Picking {item.item_id}"},
+                    {"step": "move_to_delivery", "item_id": item.item_id, "message": f"Placing {item.item_id} in front of you"},
+                    {"step": "place", "item_id": item.item_id, "message": f"Placed {item.item_id}"},
+                ])
+        return {"steps": steps, "reasoning": "Fallback deterministic plan"}

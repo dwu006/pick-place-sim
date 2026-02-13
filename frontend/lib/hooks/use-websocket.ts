@@ -2,65 +2,63 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Job } from "../types";
+import { getWsBase } from "../api";
+import { Order } from "../types";
 
-export function useJobWebSocket(jobId: string | null) {
+type WsMessage = Record<string, unknown>;
+
+export function useOrderWebSocket(
+  orderId: string | null,
+  onMessage?: (msg: WsMessage) => void
+) {
   const wsRef = useRef<WebSocket | null>(null);
   const queryClient = useQueryClient();
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
 
   const connect = useCallback(() => {
-    if (!jobId) return;
+    if (!orderId) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/${jobId}`);
+    const base = getWsBase();
+    const ws = new WebSocket(`${base}/ws/${orderId}`);
 
     ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
+      const msg = JSON.parse(event.data) as WsMessage;
+      onMessageRef.current?.(msg);
 
-      // Update the job query cache with new data
-      queryClient.setQueryData<Job>(["job", jobId], (old) => {
+      queryClient.setQueryData<Order>(["order", orderId], (old) => {
         if (!old) return old;
         const updated = { ...old };
-
         switch (msg.type) {
           case "status_update":
             updated.status = msg.status;
             break;
-          case "pour_spec_ready":
-            updated.pour_spec = msg.pour_spec;
+          case "pick_list_ready":
+            updated.pick_list = msg.pick_list;
             break;
-          case "simulation_complete":
-            updated.video_url = msg.video_url;
-            break;
-          case "evaluation_complete":
+          case "order_complete":
             updated.status = "completed";
-            updated.score = msg.score;
-            updated.feedback = msg.feedback;
-            updated.breakdown = msg.breakdown;
             break;
           case "error":
             updated.status = "failed";
             updated.error_message = msg.error;
             break;
         }
-
         return updated;
       });
 
-      // Also invalidate the jobs list
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
     };
 
     ws.onclose = () => {
-      // Reconnect after 2s if job is still in progress
-      const job = queryClient.getQueryData<Job>(["job", jobId]);
-      if (job && job.status !== "completed" && job.status !== "failed") {
+      const order = queryClient.getQueryData<Order>(["order", orderId]);
+      if (order && order.status !== "completed" && order.status !== "failed") {
         setTimeout(connect, 2000);
       }
     };
 
     wsRef.current = ws;
-  }, [jobId, queryClient]);
+  }, [orderId, queryClient]);
 
   useEffect(() => {
     connect();
@@ -69,7 +67,6 @@ export function useJobWebSocket(jobId: string | null) {
     };
   }, [connect]);
 
-  // Send a ping to keep connection alive
   useEffect(() => {
     const interval = setInterval(() => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {

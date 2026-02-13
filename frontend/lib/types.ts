@@ -1,42 +1,35 @@
-export type JobStatus =
+export type OrderStatus =
   | "queued"
   | "planning"
-  | "simulating"
-  | "evaluating"
+  | "picking"
   | "completed"
   | "failed";
 
-export interface PourSpec {
-  pattern: string;
-  pour_height: number;
-  oscillation_freq: number;
-  flow_rate: number;
-  pull_through: boolean;
+export interface PickListItem {
+  item_id: string;
+  quantity: number;
 }
 
-export interface Job {
+export interface Order {
   id: string;
-  pattern_name: string;
   natural_language_input: string;
-  pour_spec: PourSpec | null;
-  status: JobStatus;
-  video_url: string | null;
-  score: number | null;
-  feedback: string | null;
-  breakdown: Record<string, number> | null;
+  pick_list: PickListItem[] | null;
+  status: OrderStatus;
   error_message: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface PatternPreset {
+export interface StoreItem {
   id: string;
   name: string;
   description: string;
 }
 
-export interface EvaluationResult {
-  score: number;
-  feedback: string;
-  breakdown: Record<string, number>;
+export interface RobotStep {
+  type: "robot_step";
+  step: string;
+  item_id?: string;
+  quantity_index?: number;
+  message: string;
 }

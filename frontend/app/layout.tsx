@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LatteBot — Sim-to-Real Latte Art",
+  title: "Mini Store — Pick & Place",
   description:
-    "Sim-to-real training platform for precision fluid manipulation, powered by differentiable physics & multimodal AI evaluation",
+    "Say what you want. Gemini parses your order; a simulated robot picks and places items. AI Meets Robotics hackathon.",
 };
 
 export default function RootLayout({

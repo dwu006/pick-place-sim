@@ -1,97 +1,138 @@
 "use client";
 
-import { useState } from "react";
-import { Coffee, Zap, Brain } from "lucide-react";
-import { PatternInput } from "@/components/pattern-input";
-import { SimulationViewer } from "@/components/simulation-viewer";
-import { EvaluationPanel } from "@/components/evaluation-panel";
-import { PourSpecViewer } from "@/components/pour-spec-viewer";
-import { JobList } from "@/components/job-list";
-import { useCreateJob, useJob, useJobs } from "@/lib/hooks/use-jobs";
-import { useJobWebSocket } from "@/lib/hooks/use-websocket";
+import { useState, useCallback } from "react";
+import { ShoppingBag, Bot, Sparkles } from "lucide-react";
+import { OrderInput } from "@/components/order-input";
+import { OrderList } from "@/components/order-list";
+import { PickListView } from "@/components/pick-list-view";
+import { RobotStepLog } from "@/components/robot-step-log";
+import { useCreateOrder, useOrder, useOrders } from "@/lib/hooks/use-orders";
+import { useOrderWebSocket } from "@/lib/hooks/use-websocket";
 
-export default function Dashboard() {
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+interface StepEntry {
+  step: string;
+  item_id?: string;
+  message: string;
+  at: number;
+}
 
-  const createJob = useCreateJob();
-  const { data: jobs = [] } = useJobs();
-  const { data: activeJob = null } = useJob(activeJobId);
+export default function MiniStorePage() {
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [robotSteps, setRobotSteps] = useState<StepEntry[]>([]);
 
-  // Connect WebSocket for active job
-  useJobWebSocket(activeJobId);
+  const createOrder = useCreateOrder();
+  const { data: orders = [] } = useOrders();
+  const { data: activeOrder = null } = useOrder(activeOrderId);
 
-  const handleSubmit = async (input: string, preset?: string) => {
-    const job = await createJob.mutateAsync({ input, preset });
-    setActiveJobId(job.id);
+  const handleWsMessage = useCallback((msg: Record<string, unknown>) => {
+    if (msg.type === "robot_step" && typeof msg.message === "string") {
+      setRobotSteps((prev) =>
+        prev.concat({
+          step: (msg.step as string) ?? "",
+          item_id: msg.item_id as string | undefined,
+          message: msg.message,
+          at: Date.now(),
+        })
+      );
+    }
+  }, []);
+
+  useOrderWebSocket(activeOrderId, handleWsMessage);
+
+  const handleSubmit = async (input: string) => {
+    const order = await createOrder.mutateAsync(input);
+    setActiveOrderId(order.id);
+    setRobotSteps([]);
+  };
+
+  const handleSelectOrder = (id: string) => {
+    setActiveOrderId(id);
+    setRobotSteps([]);
   };
 
   return (
     <div className="min-h-screen bg-stone-50">
-      {/* Header */}
       <header className="border-b border-stone-200 bg-white">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-600 to-amber-800 flex items-center justify-center shadow-md">
-              <Coffee className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center shadow-md">
+              <ShoppingBag className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-stone-800 tracking-tight">
-                LatteBot
+              <h1 className="text-xl font-bold text-stone-800 tracking-tight">
+                Mini Store
               </h1>
-              <p className="text-[10px] text-stone-400 -mt-0.5">
-                Sim-to-Real Latte Art Training
+              <p className="text-xs text-stone-500 -mt-0.5">
+                Say what you want — robot picks & places
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-xs text-stone-400">
-            <div className="flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-              <span>Differentiable Physics</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Brain className="w-3.5 h-3.5 text-blue-500" />
-              <span>Gemini AI Eval</span>
-            </div>
+          <div className="flex items-center gap-4 text-xs text-stone-500">
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              Gemini
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Bot className="w-4 h-4 text-blue-500" />
+              Sim pick & place
+            </span>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-6">
+      <main className="max-w-6xl mx-auto px-6 py-6">
         <div className="grid grid-cols-12 gap-6">
-          {/* Left Column — Input & History */}
-          <div className="col-span-3 space-y-6">
-            <div className="rounded-2xl border-2 border-stone-100 bg-white p-5">
-              <h2 className="text-sm font-semibold text-stone-700 mb-4">
-                Create Latte Art
-              </h2>
-              <PatternInput
-                onSubmit={handleSubmit}
-                isLoading={createJob.isPending}
-              />
-            </div>
-
-            <div className="rounded-2xl border-2 border-stone-100 bg-white p-5">
-              <h2 className="text-sm font-semibold text-stone-700 mb-3">
-                Recent Jobs
-              </h2>
-              <JobList
-                jobs={jobs}
-                activeJobId={activeJobId}
-                onSelect={setActiveJobId}
-              />
-            </div>
-          </div>
-
-          {/* Center Column — Simulation */}
-          <div className="col-span-5">
-            <SimulationViewer job={activeJob} />
-          </div>
-
-          {/* Right Column — Parameters & Evaluation */}
           <div className="col-span-4 space-y-6">
-            <PourSpecViewer pourSpec={activeJob?.pour_spec || null} />
-            <EvaluationPanel job={activeJob} />
+            <section className="rounded-2xl border-2 border-stone-100 bg-white p-5">
+              <OrderInput
+                onSubmit={handleSubmit}
+                isLoading={createOrder.isPending}
+              />
+            </section>
+            <section className="rounded-2xl border-2 border-stone-100 bg-white p-5">
+              <OrderList
+                orders={orders}
+                activeOrderId={activeOrderId}
+                onSelect={handleSelectOrder}
+              />
+            </section>
+          </div>
+
+          <div className="col-span-5 rounded-2xl border-2 border-stone-100 bg-white p-5">
+            <h2 className="text-sm font-semibold text-stone-700 mb-3">
+              Robot steps
+            </h2>
+            <RobotStepLog
+              steps={robotSteps}
+              isActive={
+                !!activeOrder &&
+                activeOrder.status !== "completed" &&
+                activeOrder.status !== "failed"
+              }
+            />
+          </div>
+
+          <div className="col-span-3 space-y-6">
+            <section className="rounded-2xl border-2 border-stone-100 bg-white p-5">
+              <h2 className="text-sm font-semibold text-stone-700 mb-3">
+                Your order
+              </h2>
+              {activeOrder ? (
+                <>
+                  <p className="text-sm text-stone-600 mb-3 italic">
+                    &ldquo;{activeOrder.natural_language_input}&rdquo;
+                  </p>
+                  <PickListView pickList={activeOrder.pick_list} />
+                </>
+              ) : (
+                <p className="text-sm text-stone-400">Select an order.</p>
+              )}
+            </section>
+            {activeOrder?.error_message && (
+              <section className="rounded-2xl border-2 border-red-100 bg-red-50 p-4">
+                <p className="text-sm text-red-800">{activeOrder.error_message}</p>
+              </section>
+            )}
           </div>
         </div>
       </main>

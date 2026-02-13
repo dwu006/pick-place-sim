@@ -1,6 +1,17 @@
-import { Job, PatternPreset } from "./types";
+import { Order, StoreItem } from "./types";
 
-const BASE = "/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+const BASE = API_BASE ? `${API_BASE.replace(/\/$/, "")}/api` : "/api";
+
+/** Base URL for WebSocket (same host as API). Use when backend is on another origin (e.g. Vultr). */
+export function getWsBase(): string {
+  if (typeof window === "undefined") return "";
+  if (API_BASE) {
+    const u = new URL(API_BASE);
+    return (u.protocol === "https:" ? "wss:" : "ws:") + "//" + u.host;
+  }
+  return (window.location.protocol === "https:" ? "wss:" : "ws:") + "//" + window.location.host;
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -14,27 +25,23 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export async function getPatterns(): Promise<PatternPreset[]> {
-  return request("/patterns");
+export async function getStoreItems(): Promise<StoreItem[]> {
+  return request("/store/items");
 }
 
-export async function createJob(
-  naturalLanguageInput: string,
-  patternPreset?: string
-): Promise<Job> {
-  return request("/jobs", {
+export async function createOrder(naturalLanguageInput: string): Promise<Order> {
+  return request("/orders", {
     method: "POST",
     body: JSON.stringify({
       natural_language_input: naturalLanguageInput,
-      pattern_preset: patternPreset || undefined,
     }),
   });
 }
 
-export async function getJob(jobId: string): Promise<Job> {
-  return request(`/jobs/${jobId}`);
+export async function getOrder(orderId: string): Promise<Order> {
+  return request(`/orders/${orderId}`);
 }
 
-export async function listJobs(): Promise<Job[]> {
-  return request("/jobs");
+export async function listOrders(): Promise<Order[]> {
+  return request("/orders");
 }

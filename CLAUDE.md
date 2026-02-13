@@ -1,253 +1,147 @@
-# LatteBot Latte Art Simulation System
+# Mini Store — Pick & Place (AI Meets Robotics)
 
 ## Project Overview
-LatteBot is a latte art simulation and training system that combines:
-- Natural language pour planning using Gemini AI
-- Differentiable fluid simulation using FluidLab
-- Automated quality evaluation and feedback
-- Full-stack web dashboard for interactive control
+
+Mini Store is a **simulation-first pick-and-place** demo for the LabLab AI "Launch and Fund Your Own Startup – Edition 1" hackathon (AI Meets Robotics). The user says what they want in natural language; **Gemini** parses the request into a structured pick list; a **simulated robot** (hardcoded IK-style steps, no learning) picks items from inventory and "places" them in front of the user. The **backend runs on Vultr** as the central system of record.
+
+- **Track**: Robotic Interaction and Task Execution (Simulation-First)
+- **Sponsor tech**: Gemini (NL understanding, planning), Vultr (mandatory backend)
 
 ## Architecture
 
-### System Components
-1. **Backend (FastAPI)**: RESTful API with WebSocket support for real-time updates
-2. **Frontend (Next.js)**: Interactive dashboard for job creation and monitoring
-3. **FluidLab**: Differentiable physics engine for fluid simulation (Taichi-based)
-4. **Gemini AI Integration**: Natural language processing for planning and evaluation
+### Pipeline
 
-### Pipeline Flow
 ```
-User Input (NL) → Gemini Planner → Pour Spec → FluidLab Sim → Video → Gemini Evaluator → Score & Feedback
+User: "Two apples and a water"
+  → Frontend POST /api/orders
+  → Backend (Vultr) enqueues order
+  → Worker: Gemini parses NL → pick_list (item_id + quantity)
+  → Worker: Simulated pick-place (move_to_shelf → pick → move_to_delivery → place) per item
+  → WebSocket: Real-time status + robot steps
+  → Frontend: Order list, pick list, live robot step log
 ```
 
-## Completed Work
+### Components
 
-### 1. Backend Infrastructure (FastAPI)
-- [x] FastAPI application setup with CORS middleware
-- [x] SQLAlchemy async ORM with SQLite database
-- [x] Database models: `Job` and `TrajectoryCache`
-- [x] Pydantic schemas: `PourSpec`, `JobResponse`, `EvaluationResult`
-- [x] Background worker for job processing
-- [x] WebSocket support for real-time job status updates
+1. **Backend (FastAPI)** — Central system of record. Runs on **Vultr**.
+   - SQLite (async), REST API, WebSocket for live updates
+   - Gemini: natural language → structured order (pick list)
+   - In-process "simulator": scripted pick/place steps (no physics engine)
 
-**Key Files:**
-- `backend/main.py` - FastAPI app initialization
-- `backend/worker.py` - Background job processor
-- `backend/models.py` - Database schema
-- `backend/schemas.py` - Pydantic models
-- `backend/database.py` - Database connection
-- `backend/config.py` - Configuration settings
+2. **Frontend (Next.js)** — Web UI for ordering and monitoring.
+   - "What do you want?" input, order list, pick list, robot step log
+   - Optional: deploy on Vultr (same VM) or Vercel with `NEXT_PUBLIC_API_BASE` pointing to Vultr backend
 
-### 2. API Endpoints
-- [x] `POST /api/jobs` - Create new latte art job
-- [x] `GET /api/jobs` - List all jobs
-- [x] `GET /api/jobs/{job_id}` - Get job details
-- [x] `GET /api/patterns` - List pattern presets
-- [x] `WS /ws/{job_id}` - WebSocket for real-time updates
+3. **Store inventory** — Fixed list in code (e.g. apple, banana, water, chips, soda, cookie, sandwich, coffee). Gemini maps user phrases to these `item_id`s.
 
-**Router Files:**
-- `backend/routers/jobs.py`
-- `backend/routers/patterns.py`
-- `backend/routers/websocket.py`
+## Key Files
 
-### 3. Gemini AI Integration
-- [x] **Planner Service** (`gemini_planner.py`):
-  - Converts natural language descriptions to pour parameters
-  - Uses Gemini 2.0 Flash with structured JSON output
-  - Schema validation for pour specifications
-  - Fallback defaults for rosetta, tulip, heart patterns
+| Area        | Files |
+|------------|--------|
+| Backend    | `backend/main.py`, `backend/worker.py`, `backend/models.py`, `backend/schemas.py`, `backend/routers/orders.py`, `backend/routers/websocket.py` |
+| Services   | `backend/services/gemini_order_parser.py`, `backend/services/gemini_planner.py` (plan generation), `backend/services/gemini_robot_agent.py` (plan execution), `backend/services/pick_place_simulator.py` (fallback), `backend/order_store.py` |
+| Sim        | `backend/sim/` — MuJoCo Franka FR3 scene with table (optional; requires mujoco_menagerie) |
+| Frontend   | `frontend/app/page.tsx`, `frontend/components/order-input.tsx`, `frontend/components/order-list.tsx`, `frontend/components/robot-step-log.tsx`, `frontend/components/pick-list-view.tsx` |
+| Config     | `backend/config.py` (DB path, CORS, `GEMINI_API_KEY`) |
 
-- [x] **Evaluator Service** (`gemini_evaluator.py`):
-  - Evaluates pour quality based on parameters
-  - Provides scores (0-100) and detailed feedback
-  - Breakdown scores: contrast, symmetry, definition, crema_quality
-  - Intelligent heuristics for pattern-specific evaluation
+## API
 
-### 4. Fluid Simulation (FluidLab Integration)
-- [x] FluidLab repository added to project
-- [x] Mock simulator service (`fluid_simulator.py`) created
-- [ ] **TODO**: Replace mock with real FluidLab integration
+- `POST /api/orders` — Body: `{ "natural_language_input": "..." }`. Creates order, returns `OrderResponse`.
+- `GET /api/orders` — List recent orders.
+- `GET /api/orders/{order_id}` — Get one order.
+- `GET /api/store/items` — List store inventory (id, name, description).
+- `WS /ws/{order_id}` — Real-time: `status_update`, `pick_list_ready`, `robot_step`, `order_complete`, `error`.
 
-**FluidLab Features:**
-- Differentiable physics engine (Taichi-based)
-- Multi-material support (liquids, solids, gases)
-- Two rendering modes: GGUIRenderer (fast) and GLRenderer (high-quality)
-- Trajectory optimization via differentiable physics
-
-### 5. Frontend Dashboard (Next.js)
-- [x] Next.js 15 application initialized
-- [x] TypeScript configuration
-- [x] TailwindCSS styling setup
-- [x] Basic UI layout structure
-- [ ] **TODO**: Implement full dashboard UI components
-
-**Frontend Structure:**
-- `frontend/app/page.tsx` - Main page component
-- `frontend/app/layout.tsx` - Root layout
-- `frontend/app/globals.css` - Global styles
-
-## TODO List
-
-### High Priority
-
-#### 1. FluidLab Integration
-- [ ] Set up FluidLab Python environment (conda)
-  ```bash
-  cd FluidLab/
-  conda env create -f environment.yml
-  conda activate fluidlab
-  pip install -e .
-  ```
-- [ ] Create Python wrapper for FluidLab latte art simulation
-- [ ] Implement pour trajectory generation from `PourSpec` parameters
-- [ ] Configure rendering pipeline (start with GGUIRenderer for speed)
-- [ ] Save simulation output as video files to `backend/static/videos/`
-- [ ] Update `fluid_simulator.py` to call real FluidLab engine
-- [ ] Handle simulation errors and timeouts gracefully
-
-#### 2. Frontend Dashboard Implementation
-- [ ] **Job Creation UI**:
-  - Natural language input form
-  - Pattern preset selection buttons (rosetta, tulip, heart)
-  - Submit button to create job
-
-- [ ] **Job Monitoring UI**:
-  - Job list with status indicators
-  - Real-time status updates via WebSocket
-  - Progress indicators for planning/simulating/evaluating stages
-
-- [ ] **Results Display**:
-  - Video player for simulation results
-  - Score display with breakdown visualization
-  - Feedback text presentation
-  - Parameter details panel
-
-- [ ] **API Integration**:
-  - Fetch jobs from `/api/jobs`
-  - Create jobs via `/api/jobs`
-  - WebSocket connection for live updates
-  - Error handling and loading states
-
-#### 3. Video Storage & Serving
-- [ ] Create `backend/static/videos/` directory
-- [ ] Implement video file naming convention (job_id-based)
-- [ ] Configure static file serving for video playback
-- [ ] Add video cleanup/archival strategy for old jobs
-
-#### 4. Enhanced Gemini Evaluation
-- [ ] Update evaluator to accept actual simulation images/video
-- [ ] Use Gemini's multimodal capabilities for visual analysis
-- [ ] Compare target pattern with achieved result
-- [ ] Provide specific visual feedback (e.g., "top leaf is too narrow")
-
-### Medium Priority
-
-#### 5. Trajectory Optimization
-- [ ] Implement trajectory caching using `TrajectoryCache` model
-- [ ] Add hash function for `PourSpec` objects
-- [ ] Cache successful pour trajectories for reuse
-- [ ] Add endpoint to retrieve cached trajectories
-
-#### 6. Robot Control Integration
-- [ ] Design robot action space mapping from pour parameters
-- [ ] Implement trajectory-to-robot-commands converter
-- [ ] Add Isaac Sim integration for robot visualization
-- [ ] Create dual Franka robot coordination system
-
-#### 7. Testing & Validation
-- [ ] Unit tests for Gemini planner/evaluator services
-- [ ] Integration tests for full pipeline
-- [ ] End-to-end tests with real FluidLab simulations
-- [ ] Frontend component tests
-- [ ] Load testing for concurrent job processing
-
-#### 8. Documentation
-- [ ] API documentation (OpenAPI/Swagger)
-- [ ] Frontend component documentation
-- [ ] FluidLab integration guide
-- [ ] Deployment instructions
-- [ ] User guide for dashboard
-
-### Low Priority
-
-#### 9. Advanced Features
-- [ ] Custom pattern upload/creation
-- [ ] Pattern library with search
-- [ ] Historical job analytics
-- [ ] Comparative analysis between attempts
-- [ ] User accounts and authentication
-- [ ] Sharing pour recipes/results
-
-#### 10. Performance Optimization
-- [ ] Implement job queue with priority levels
-- [ ] Add GPU queue management for simulations
-- [ ] Optimize database queries with proper indexing
-- [ ] Add Redis for caching and job queue
-- [ ] Implement rate limiting for API
-
-#### 11. DevOps
-- [ ] Docker containerization
-- [ ] Docker Compose for full stack
-- [ ] CI/CD pipeline setup
-- [ ] Automated testing in CI
-- [ ] Production deployment configuration
-
-## Current Status
-
-### Working
-- Backend API server with async job processing
-- Gemini-based natural language planning
-- Gemini-based quality evaluation
-- Database persistence for jobs
-- WebSocket real-time updates
-- Mock simulation pipeline
-
-### In Progress
-- FluidLab integration (repository added, needs Python wrapper)
-- Frontend dashboard (initialized, needs UI implementation)
-
-### Blocked/Pending
-- Real simulation videos (depends on FluidLab integration)
-- Visual quality evaluation (depends on simulation videos)
-- Robot control (depends on simulation validation)
-
-## Development Setup
+## Development
 
 ### Backend
+
 ```bash
 cd backend/
 python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+# Windows: venv\Scripts\activate
 pip install -r requirements.txt
-# Create .env file with GEMINI_API_KEY
+# .env: GEMINI_API_KEY=...
 uvicorn main:app --reload --port 8000
 ```
 
 ### Frontend
+
 ```bash
 cd frontend/
 npm install
-npm run dev  # runs on port 3000
+npm run dev   # port 3000; rewrites proxy /api and /ws to backend:8000
 ```
 
-### FluidLab
-```bash
-cd FluidLab/
-conda env create -f environment.yml
-conda activate fluidlab
-pip install -e .
-```
+### Env
 
-## Key Design Decisions
+- **Backend**: `GEMINI_API_KEY` (required). Optional: `USE_DATABASE=false` (in-memory orders only); `USE_GEMINI_ROBOT_AGENT=true` (default) so Gemini generates the full plan upfront (plan-first approach).
+- **Frontend**: `NEXT_PUBLIC_API_BASE` optional; if set (e.g. `https://your-backend.vultr.com`), API and WebSocket use that host.
 
-1. **Async Processing**: Jobs run in background worker to avoid blocking API
-2. **WebSockets**: Real-time updates for better UX during long simulations
-3. **Gemini AI**: Leverages multimodal LLM for both planning and evaluation
-4. **FluidLab**: Differentiable physics enables future gradient-based optimization
-5. **Mock-First**: Mock simulator allows end-to-end testing before FluidLab integration
+## Deploying on Vultr (Hackathon Requirement)
+
+Vultr must host the **backend** as the central system of record.
+
+1. **Create a Vultr VM** (e.g. Ubuntu 22.04). Open ports: 80, 443, 8000 (or reverse-proxy 80→8000).
+
+2. **On the VM** — Backend only (minimal):
+   ```bash
+   sudo apt update && sudo apt install -y python3.11-venv
+   git clone <your-repo> && cd latte-art-sim/backend
+   python3 -m venv venv && source venv/bin/activate
+   pip install -r requirements.txt
+   # Set GEMINI_API_KEY in .env or export
+   uvicorn main:app --host 0.0.0.0 --port 8000
+   ```
+   Or run under gunicorn + systemd for production.
+
+3. **CORS**: In `backend/config.py`, set `cors_origins` to include your frontend origin (e.g. `https://your-frontend.vercel.app` or `https://your-vultr-ip` if you serve the frontend on the same VM).
+
+4. **Frontend pointing to Vultr**: Build with:
+   ```bash
+   NEXT_PUBLIC_API_BASE=https://your-backend.vultr.com npm run build
+   ```
+   Then deploy the frontend anywhere (Vercel, or same Vultr VM with `npm run start` behind nginx). Users will hit the frontend; the frontend will call and open WebSockets to `NEXT_PUBLIC_API_BASE`.
+
+5. **Optional — All on one Vultr VM**: Serve FastAPI on 8000 and build/serve Next.js (e.g. port 3000), then put nginx in front: `/` → Next.js, `/api` and `/ws` → FastAPI. Then no `NEXT_PUBLIC_API_BASE` needed.
+
+## Why a database?
+
+The app can run **without a database** (`USE_DATABASE=false`). Orders are then kept in memory; the backend still queues and processes them, and the frontend works the same. Use this for quick demos or when you don’t want to manage SQLite. For the hackathon, Vultr expects a “central system of record” — so for submission, keep `USE_DATABASE=true` (default) so orders are persisted.
+
+## MuJoCo + Franka FR3 (optional)
+
+To show the Franka arm in simulation:
+
+1. **Clone [mujoco_menagerie](https://github.com/google-deepmind/mujoco_menagerie)** (Franka FR3 requires MuJoCo 3.1.3+):
+   ```bash
+   git clone https://github.com/google-deepmind/mujoco_menagerie
+   # Put it next to the repo or set MUJOCO_MENAGERIE_PATH to its path
+   ```
+2. **Install MuJoCo**: `pip install mujoco>=3.1.3`
+3. **Scene with table**: `backend/sim/` loads the menagerie’s `franka_fr3/scene.xml`, injects a table under the robot, and exposes `load_scene_with_table()` → `(model, data)`. Use this for a viewer or for feeding poses into the same pipeline later.
+
+## Gemini doing the work (plan-first approach)
+
+By default, **Gemini generates the full pick-place plan upfront** (plan-first, better than function calling). For each order, Gemini receives the pick list and outputs a structured plan: `{"steps": [{"step": "move_to_shelf", "item_id": "apple", "message": "..."}, ...], "reasoning": "..."}`. The backend then executes this plan step-by-step, broadcasting each action. This approach:
+- **Single API call** (faster, cheaper than function calling)
+- **Shows Gemini's reasoning** (the "reasoning" field explains the strategy)
+- **Deterministic execution** (plan is generated once, then executed reliably)
+- **Still demonstrates AI planning** (Gemini decides the sequence and repetition)
+
+See `backend/services/gemini_planner.py` (plan generation) and `backend/services/gemini_robot_agent.py` (plan execution). To fall back to the hardcoded step sequence, set `USE_GEMINI_ROBOT_AGENT=false`.
+
+## Design Doc
+
+- `docs/plans/2026-02-12-pick-place-mini-store-design.md` — Pivot design and scope.
+
+## What Was Removed (Latte Art Pivot)
+
+- Latte art domain: `Job`, `PourSpec`, patterns, evaluator, fluid_simulator, FluidLab references.
+- Old frontend: pattern presets, simulation viewer, evaluation panel, pour spec viewer, job list (replaced by order equivalents).
 
 ## References
 
-- [FluidLab Paper (ICLR 2023)](https://arxiv.org/abs/2303.02346)
-- [FluidLab Project Page](https://fluidlab2023.github.io/)
-- [Lattebot Architecture PDF](./Lattebot%20Architecture.pdf)
+- [LabLab AI Hackathon](https://lablab.ai) — Launch and Fund Your Own Startup, Edition 1 (AI Meets Robotics).
+- [Vultr](https://www.vultr.com) — Backend hosting (mandatory for hackathon).
+- [Gemini API](https://ai.google.dev/) — NL order parsing.
