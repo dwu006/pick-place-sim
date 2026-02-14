@@ -241,16 +241,10 @@ def _room_table_objects_xml() -> str:
 # Opening tag of the hand body in panda.xml (insert wrist camera + visible marker as first children)
 # Hand quat (w,x,y,z)=(.9239,0,0,-.3827) ~ 45 deg around Z; so hand -Z is world down (0,0,-1).
 _HAND_BODY_OPEN = '<body name="hand" pos="0 0 0.107" quat="0.9238795 0 0 -0.3826834">'
-# Camera on wrist: same quat as ray (0 1 0 0 = 180 deg X) so it looks down at gripper; ray points down.
+# Camera on wrist (no visual markers - just the camera)
 _WRIST_CAMERA_INSERT = (
     '<body name="hand" pos="0 0 0.107" quat="0.9238795 0 0 -0.3826834">\n'
-    '      <camera name="hand_camera" pos="0.04 0 -0.01" quat="0 1 0 0" fovy="60" resolution="640 480"/>\n'
-    '      <body name="hand_camera_marker" pos="0.04 0 -0.01">\n'
-    '        <geom name="hand_camera_vis" type="sphere" size="0.018" rgba="1 0 0 0.85" contype="0" conaffinity="0" group="2"/>\n'
-    '        <body name="hand_camera_ray" pos="0 0 0" quat="0 1 0 0">\n'
-    '          <geom name="hand_camera_look" type="cylinder" size="0.004 0.08" pos="0 0 -0.08" rgba="0 0.9 0 0.9" contype="0" conaffinity="0" group="2"/>\n'
-    '        </body>\n'
-    '      </body>'
+    '      <camera name="hand_camera" pos="0.04 0 -0.01" quat="0 1 0 0" fovy="60" resolution="640 480"/>'
 )
 
 
