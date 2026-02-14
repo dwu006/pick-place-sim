@@ -297,31 +297,15 @@ class RobotController:
         return result
 
     def update_held_object(self):
-        """Update position of held object to smoothly follow gripper."""
+        """Held object follows gripper exactly."""
         if self.held_object and self.held_object in self.object_body_ids:
             body_id = self.object_body_ids[self.held_object]
-
-            # Get end effector position
             ee_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "hand")
-            if ee_body_id < 0:
-                ee_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "link7")
-            if ee_body_id < 0:
-                return
-
-            ee_pos = self.data.xpos[ee_body_id].copy()
-            target_pos = ee_pos.copy()
-            target_pos[2] -= 0.08  # offset below gripper fingers
-
-            # Get current object position
-            current_pos = self.model.body_pos[body_id].copy()
-
-            # Smoothly interpolate object toward gripper (no instant teleport)
-            # Use exponential smoothing for natural motion
-            alpha = 0.3  # smoothing factor (0=no move, 1=instant teleport)
-            new_pos = current_pos + alpha * (target_pos - current_pos)
-
-            self.model.body_pos[body_id] = new_pos
-            mujoco.mj_forward(self.model, self.data)
+            if ee_body_id >= 0:
+                ee_pos = self.data.xpos[ee_body_id].copy()
+                ee_pos[2] -= 0.05
+                self.model.body_pos[body_id] = ee_pos
+                mujoco.mj_forward(self.model, self.data)
 
     def reset_objects(self):
         """Reset all objects to their initial positions (as loaded from the scene)."""
@@ -365,9 +349,8 @@ class RobotController:
 
                 self.gripper_target = GRIPPER_OPEN
 
-                # Target the object directly - IK already accounts for gripper offset
+                # Go directly to the object
                 grasp_target = target_pos.copy()
-                grasp_target[2] += 0.02  # tiny offset for object height
 
                 # Calculate rotation angle to face object
                 angle = math.atan2(target_pos[1], target_pos[0])
