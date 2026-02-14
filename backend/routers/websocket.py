@@ -1,9 +1,11 @@
 import json
+import logging
 from typing import Dict, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 connections: Dict[str, Set[WebSocket]] = {}
 sim_subscribers: Set[WebSocket] = set()
@@ -26,11 +28,14 @@ async def broadcast(order_id: str, message: dict):
 
 async def broadcast_to_sim(order_id: str):
     """Notify all connected sim clients that a new order is ready to run."""
+    logger.info(f"broadcast_to_sim called for order {order_id}, sim_subscribers count: {len(sim_subscribers)}")
     dead = set()
     for ws in sim_subscribers:
         try:
+            logger.info(f"Sending new_order to sim client: {order_id}")
             await ws.send_text(json.dumps({"type": "new_order", "order_id": order_id}))
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to send to sim client: {e}")
             dead.add(ws)
     for ws in dead:
         sim_subscribers.discard(ws)
@@ -52,8 +57,10 @@ async def sim_websocket(websocket: WebSocket):
     """Channel for sim clients waiting for orders. Backend sends new_order when user submits a task."""
     await websocket.accept()
     sim_subscribers.add(websocket)
+    logger.info(f"Sim client connected. Total sim_subscribers: {len(sim_subscribers)}")
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
         sim_subscribers.discard(websocket)
+        logger.info(f"Sim client disconnected. Total sim_subscribers: {len(sim_subscribers)}")
