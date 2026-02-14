@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     cors_origins: List[str] = ["http://localhost:3000"]
     database_url: str = "sqlite+aiosqlite:///./ministore.db"
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash-preview-04-17"
     # Gemini Robotics-ER 1.5 for vision-language / robotics (optional, requires special access).
     # Falls back to gemini_model if not available.
     gemini_robotics_model: str = ""
