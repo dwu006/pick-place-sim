@@ -254,20 +254,21 @@ class RobotController:
         reach_norm = max(0.0, min(1.0, reach_norm))
 
         if phase == "approach":
-            # Approach: arm extended but raised
-            qpos[1] = 0.1 + reach_norm * 0.2      # Shoulder: 0.1 to 0.3
+            # Approach: arm extended, slightly raised above object
+            qpos[1] = 0.4 + reach_norm * 0.3      # Shoulder: lean forward
             qpos[2] = 0.0                          # Shoulder rotation
-            qpos[3] = -1.9 + reach_norm * 0.2     # Elbow: -1.9 to -1.7
+            qpos[3] = -1.2 - reach_norm * 0.3     # Elbow: bent
             qpos[4] = 0.0                          # Forearm rotation
-            qpos[5] = 2.0 - reach_norm * 0.2      # Wrist: 2.0 to 1.8
+            qpos[5] = 1.8 + reach_norm * 0.2      # Wrist: angled down
             qpos[6] = 0.785                        # Gripper rotation
         else:
-            # Pick: arm extended and lowered to table
-            qpos[1] = 0.5 + reach_norm * 0.3      # Shoulder: 0.5 to 0.8 (more forward)
+            # Pick: arm fully extended DOWN to table level (z ~ 0.32)
+            # Robot base is at z=0.3, so gripper must reach z=0.32
+            qpos[1] = 0.8 + reach_norm * 0.4      # Shoulder: lean forward MORE (0.8 to 1.2)
             qpos[2] = 0.0                          # Shoulder rotation
-            qpos[3] = -1.5 + reach_norm * 0.3     # Elbow: -1.5 to -1.2 (more extended)
+            qpos[3] = -0.8 - reach_norm * 0.3     # Elbow: more extended (-0.8 to -1.1)
             qpos[4] = 0.0                          # Forearm rotation
-            qpos[5] = 2.0 - reach_norm * 0.3      # Wrist: 2.0 to 1.7
+            qpos[5] = 2.2 + reach_norm * 0.3      # Wrist: point down (2.2 to 2.5)
             qpos[6] = 0.785                        # Gripper rotation
 
         # Adjust J7 (gripper rotation) based on approach angle for better grasp
