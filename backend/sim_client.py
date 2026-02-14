@@ -630,11 +630,22 @@ def run_simulation(controller: RobotController, model, data):
             def scroll_callback(window, xoffset, yoffset):
                 camera.distance = max(0.5, camera.distance - yoffset * 0.2)
 
+            def key_callback(window, key, scancode, action, mods):
+                if action == glfw.PRESS:
+                    if key == glfw.KEY_R:
+                        controller.reset_objects()
+                        print("Scene reset!")
+                    elif key == glfw.KEY_H:
+                        # Return arm to home position
+                        controller.add_step("done", "", "Home")
+                        print("Returning to home...")
+
             glfw.set_mouse_button_callback(window, mouse_button_callback)
             glfw.set_cursor_pos_callback(window, cursor_pos_callback)
             glfw.set_scroll_callback(window, scroll_callback)
+            glfw.set_key_callback(window, key_callback)
 
-            print("Controls: Left-drag=rotate, Right-drag=pan, Scroll=zoom")
+            print("Controls: Left-drag=rotate, Right-drag=pan, Scroll=zoom, R=reset scene, H=home")
 
             while not glfw.window_should_close(window):
                 step_start = time.time()
