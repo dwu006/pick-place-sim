@@ -3,7 +3,7 @@ import logging
 from typing import Any
 
 from config import settings
-from order_store import get_next_queued_order, get_order, update_order
+from order_store import get_next_queued_order, get_order, get_wrist_image, update_order
 from routers.websocket import broadcast
 from schemas import PickListItem
 from services.gemini_order_parser import parse_order
@@ -25,7 +25,9 @@ async def _process_order(order_id: str):
         await update_order(order_id, status="planning")
         await broadcast(order_id, {"type": "status_update", "order_id": order_id, "status": "planning"})
 
-        pick_list = await parse_order(order.natural_language_input if hasattr(order, "natural_language_input") else order["natural_language_input"])
+        nl_input = order.natural_language_input if hasattr(order, "natural_language_input") else order["natural_language_input"]
+        wrist_image = get_wrist_image(order_id)
+        pick_list = await parse_order(nl_input, image_bytes=wrist_image)
         pick_list_dict = [{"item_id": p.item_id, "quantity": p.quantity} for p in pick_list]
         await update_order(order_id, pick_list=pick_list_dict)
         await broadcast(order_id, {"type": "pick_list_ready", "order_id": order_id, "pick_list": pick_list_dict})

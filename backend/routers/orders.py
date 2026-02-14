@@ -1,9 +1,14 @@
 from typing import Any, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from config import settings
-from order_store import create_order as store_create_order, get_order as store_get_order, list_orders as store_list_orders
+from order_store import (
+    create_order as store_create_order,
+    get_order as store_get_order,
+    list_orders as store_list_orders,
+    set_wrist_image,
+)
 from routers.websocket import broadcast_to_sim
 from schemas import OrderCreateRequest, OrderResponse, StoreItem
 from spawn_sim import spawn_sim_client
@@ -60,6 +65,16 @@ async def get_order(order_id: str):
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return _to_response(order)
+
+
+@router.post("/orders/{order_id}/wrist_image", status_code=200)
+async def upload_wrist_image(order_id: str, request: Request):
+    """Accept a wrist-camera PNG and associate it with the order for vision-based parsing."""
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Empty body")
+    set_wrist_image(order_id, body)
+    return {"ok": True, "order_id": order_id}
 
 
 @router.get("/store/items", response_model=List[StoreItem])

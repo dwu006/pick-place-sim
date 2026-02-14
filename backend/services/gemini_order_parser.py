@@ -1,13 +1,14 @@
 """Parse natural language cleanup requests into structured pick lists using Gemini."""
 import json
 import logging
-from typing import List
+from typing import List, Optional
 
 from google import genai
 from google.genai import types
 
 from config import settings
 from schemas import PickListItem
+from services import gemini_robotics
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +72,44 @@ def _model_for_parse() -> str:
     return getattr(settings, "gemini_robotics_model", None) or settings.gemini_model
 
 
-async def parse_order(natural_language_input: str) -> List[PickListItem]:
-    """Use Gemini to parse natural language into a validated pick list."""
+VISION_PICK_PROMPT = """You see a wrist-camera image from a robot and a user request. List the objects to pick up and put in the bin.
+
+Available object IDs (use exactly these strings): {room_ids}
+
+User request: {user_request}
+
+Output a JSON array of objects, each with "item_id" (one of the available IDs) and "quantity" (positive integer).
+Respond ONLY with a valid JSON array. No markdown, no extra text."""
+
+
+async def parse_order(natural_language_input: str, image_bytes: Optional[bytes] = None) -> List[PickListItem]:
+    """Use Gemini to parse natural language (and optional wrist image) into a validated pick list."""
+    # Vision path: when wrist image is available, use ER 1.5 with image + text
+    if image_bytes:
+        try:
+            prompt = VISION_PICK_PROMPT.format(
+                room_ids=json.dumps(ROOM_OBJECT_IDS),
+                user_request=natural_language_input,
+            )
+            raw = await gemini_robotics.generate_robotics_json(prompt, image_bytes=image_bytes, temperature=0.2)
+            if raw is not None:
+                if isinstance(raw, dict):
+                    raw = raw.get("pick_list", raw.get("items", []))
+                if not isinstance(raw, list):
+                    raw = [raw]
+                result = []
+                for obj in raw:
+                    item_id = (obj.get("item_id") or "").strip().lower()
+                    qty = max(1, int(obj.get("quantity") or 1))
+                    if item_id in ROOM_OBJECT_IDS:
+                        result.append(PickListItem(item_id=item_id, quantity=qty))
+                if result:
+                    logger.info("Gemini vision parse: image + %s -> %s", natural_language_input, result)
+                    return result
+        except Exception as e:
+            logger.warning("Vision-based parse failed, falling back to text: %s", e)
+
+    # Text-only path
     model = _model_for_parse()
     try:
         response = await client.aio.models.generate_content(

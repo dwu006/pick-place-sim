@@ -20,6 +20,9 @@ def _now() -> datetime:
 # In-memory store when use_database is False
 _memory_orders: Dict[str, Dict[str, Any]] = {}
 
+# Wrist camera images per order_id (in-memory only; used for vision-based parsing)
+_wrist_images: Dict[str, bytes] = {}
+
 
 async def create_order(natural_language_input: str) -> Any:
     if settings.use_database:
@@ -100,6 +103,16 @@ async def update_order(
         if error_message is not None:
             o["error_message"] = error_message
         o["updated_at"] = _now()
+
+
+def set_wrist_image(order_id: str, image_bytes: bytes) -> None:
+    """Store wrist image for an order (in-memory)."""
+    _wrist_images[order_id] = image_bytes
+
+
+def get_wrist_image(order_id: str) -> Optional[bytes]:
+    """Return stored wrist image for an order, or None."""
+    return _wrist_images.get(order_id)
 
 
 async def get_next_queued_order() -> Optional[Any]:

@@ -14,8 +14,12 @@ Cleanup Room is a **simulation-first pick-and-place** demo for the LabLab AI "La
 ```
 User: "Pick up the red block and the cup"
   → Frontend POST /api/orders
-  → Backend (Vultr) enqueues order
-  → Worker: Gemini parses NL → pick_list (item_id + quantity)
+  → Backend (Vultr) enqueues order, broadcasts "new_order" on /ws/sim
+  → Sim client (if running): receives new_order → renders hand_camera frame → POSTs PNG to /api/orders/{id}/wrist_image
+  → Backend: stores wrist image in memory (keyed by order_id)
+  → Worker: get_wrist_image(order_id); parse_order(nl, image_bytes=…)
+     → If image present: Gemini Robotics (ER 1.5) with image + text → pick_list
+     → Else or on failure: text-only Gemini → pick_list
   → Worker: Simulated pick-place (move_to_pick → pick → move_to_delivery → place) per object → bin
   → WebSocket: Real-time status + robot steps
   → Frontend: Task list, objects to tidy, live robot step log
@@ -39,7 +43,8 @@ User: "Pick up the red block and the cup"
 | Area        | Files |
 |------------|--------|
 | Backend    | `backend/main.py`, `backend/worker.py`, `backend/models.py`, `backend/schemas.py`, `backend/routers/orders.py`, `backend/routers/websocket.py` |
-| Services   | `backend/services/gemini_order_parser.py`, `backend/services/gemini_planner.py` (plan generation), `backend/services/gemini_robot_agent.py` (plan execution), `backend/services/pick_place_simulator.py` (fallback), `backend/order_store.py` |
+| Services   | `backend/services/gemini_order_parser.py` (text + vision), `backend/services/gemini_robotics.py` (ER 1.5), `backend/services/gemini_planner.py` (plan generation), `backend/services/gemini_robot_agent.py` (plan execution), `backend/services/pick_place_simulator.py` (fallback), `backend/order_store.py` (orders + wrist images) |
+| Sim client | `backend/sim_client.py` — MuJoCo viewer, connects to `/ws/sim`, captures `hand_camera`, POSTs wrist image, receives steps via `/ws/{order_id}`. Run: `python sim_client.py --wait --backend-url ws://localhost:8000`. |
 | Sim        | `backend/sim/` — MuJoCo Franka scene with room (floor, walls, table, scatter objects, bin; optional; requires mujoco_menagerie). Optional: **object_sim** ([vikashplus/object_sim](https://github.com/vikashplus/object_sim)) for richer object meshes — clone into repo root; see `get_object_sim_path()`, `OBJECT_SIM_OBJECT_NAMES`, `backend/sim/preview_object_sim.py`. |
 | Frontend   | `frontend/app/page.tsx`, `frontend/components/order-input.tsx`, `frontend/components/order-list.tsx`, `frontend/components/robot-step-log.tsx`, `frontend/components/pick-list-view.tsx` |
 | Config     | `backend/config.py` (DB path, CORS, `GEMINI_API_KEY`) |
@@ -49,7 +54,9 @@ User: "Pick up the red block and the cup"
 - `POST /api/orders` — Body: `{ "natural_language_input": "..." }`. Creates order, returns `OrderResponse`.
 - `GET /api/orders` — List recent orders.
 - `GET /api/orders/{order_id}` — Get one order.
+- `POST /api/orders/{order_id}/wrist_image` — Body: raw PNG bytes (`Content-Type: image/png`). Sim client uploads wrist-camera frame for vision-based parsing.
 - `GET /api/store/items` — List store inventory (id, name, description).
+- `WS /ws/sim` — Backend sends `new_order` { order_id }; sim client subscribes and uploads wrist image, then connects to `/ws/{order_id}` for steps.
 - `WS /ws/{order_id}` — Real-time: `status_update`, `pick_list_ready`, `robot_step`, `order_complete`, `error`.
 
 ## Development
@@ -134,6 +141,23 @@ By default, **Gemini generates the full pick-place plan upfront** (plan-first, b
 - **Still demonstrates AI planning** (Gemini decides the sequence and repetition)
 
 See `backend/services/gemini_planner.py` (plan generation) and `backend/services/gemini_robot_agent.py` (plan execution). To fall back to the hardcoded step sequence, set `USE_GEMINI_ROBOT_AGENT=false`.
+
+## Wrist camera & Gemini Robotics (ER 1.5)
+
+**What’s done:**
+
+- **Sim client** (`backend/sim_client.py`): On `new_order`, renders one frame from `hand_camera` (MuJoCo `Renderer` 640×480), encodes PNG, POSTs to `POST /api/orders/{order_id}/wrist_image`. Requires `httpx` and `Pillow` in `backend/requirements.txt`.
+- **Backend**: `order_store.set_wrist_image` / `get_wrist_image` (in-memory); `POST /api/orders/{order_id}/wrist_image` stores image per order.
+- **Parser** (`backend/services/gemini_order_parser.py`): `parse_order(nl_input, image_bytes=None)`. When `image_bytes` is present, calls `gemini_robotics.generate_robotics_json` (ER 1.5) with image + prompt for pick list (same schema: `ROOM_OBJECT_IDS`, JSON array of `{item_id, quantity}`); validates and returns list. On failure or no image, falls back to text-only Gemini.
+- **Worker** (`backend/worker.py`): Gets `get_wrist_image(order_id)` before parsing and passes to `parse_order`. IK and planner unchanged; ER 1.5 only augments where the pick list comes from.
+
+**What’s left (optional / later):**
+
+- **Timing**: Sim client must POST the wrist image before the worker runs; if the worker picks the order first, parsing is text-only. Consider delaying worker slightly for new orders or having the worker wait for an image with a short timeout.
+- **ER 1.5 function-calling**: Use high-level actions (e.g. `move(x,y)`, `setGripperState(open)`) from ER 1.5 and map normalized 2D to 3D for IK (documented in plan; not implemented).
+- **2D→3D**: Use ER 1.5 object points/labels + table plane + camera model to derive 3D targets for IK (optional).
+- **Second camera**: Fixed overhead or other viewpoint (optional).
+- **Persistence**: Wrist images are in-memory only; no DB column or file store yet.
 
 ## Design Doc
 

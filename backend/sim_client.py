@@ -14,12 +14,20 @@ Example:
 """
 import argparse
 import asyncio
+import io
 import json
 import os
 import sys
 import time
 import threading
 from typing import Optional
+
+try:
+    import httpx
+    from PIL import Image
+except ImportError:
+    httpx = None
+    Image = None
 
 # Ensure backend dir is on path
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -371,6 +379,49 @@ async def websocket_listener(url: str, order_id: str, controller: RobotControlle
         return False
 
 
+def _capture_wrist_image(model, data):
+    """Render one frame from hand_camera and return PNG bytes, or None on failure."""
+    if model is None or data is None:
+        return None
+    try:
+        # hand_camera resolution in scene is 640x480
+        width, height = 640, 480
+        renderer = mujoco.Renderer(model, height=height, width=width)
+        renderer.update_scene(data, camera="hand_camera")
+        pixels = renderer.render()
+        if pixels is None or pixels.size == 0:
+            return None
+        if Image is None:
+            return None
+        img = Image.fromarray(pixels)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception as e:
+        print(f"Wrist capture failed: {e}")
+        return None
+
+
+async def _send_wrist_image_to_backend(http_base: str, order_id: str, image_bytes: bytes) -> bool:
+    """POST wrist image to backend. Returns True on success."""
+    if not image_bytes or not http_base or not order_id:
+        return False
+    if httpx is None:
+        print("httpx not installed; skipping wrist image upload")
+        return False
+    url = f"{http_base.rstrip('/')}/api/orders/{order_id}/wrist_image"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(url, content=image_bytes, headers={"Content-Type": "image/png"})
+            if r.status_code == 200:
+                return True
+            print(f"Wrist image upload failed: {r.status_code}")
+            return False
+    except Exception as e:
+        print(f"Wrist image upload error: {e}")
+        return False
+
+
 async def wait_for_orders_loop(url: str, controller: RobotController):
     """Connect to /ws/sim and run each order when the backend sends new_order."""
     sim_ws_url = f"{url}/ws/sim"
@@ -386,6 +437,13 @@ async def wait_for_orders_loop(url: str, controller: RobotController):
                             order_id = msg.get("order_id")
                             if order_id:
                                 print(f"\n--- New order: {order_id} ---")
+                                # Capture wrist camera and send to backend for vision-based parsing
+                                http_base = url.replace("ws://", "http://").replace("wss://", "https://")
+                                image_bytes = _capture_wrist_image(controller.model, controller.data)
+                                if image_bytes:
+                                    ok = await _send_wrist_image_to_backend(http_base, order_id, image_bytes)
+                                    if ok:
+                                        print("Wrist image sent to backend.")
                                 await websocket_listener(url, order_id, controller)
                                 controller.reset_objects()
                     except json.JSONDecodeError:
