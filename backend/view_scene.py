@@ -1,9 +1,16 @@
 """
 Quick viewer script to see the MuJoCo scene with the Franka Emika Panda robot.
-Run: python view_scene.py
+Run from repo root: python backend/view_scene.py
+Or from backend:  python view_scene.py
 """
+import os
 import sys
 import time
+
+# Ensure backend dir is on path so "from sim import ..." works from any cwd
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
 
 try:
     import mujoco
@@ -37,6 +44,11 @@ print("  - Close window to exit\n")
 
 # Launch viewer and run simulation
 with mujoco.viewer.launch_passive(model, data) as viewer:
+    # Point camera at box platform (objects placed randomly on box, robot at origin)
+    viewer.cam.lookat[:] = [0.0, 0.0, 0.35]
+    viewer.cam.distance = 2.2
+    viewer.cam.azimuth = 135
+    viewer.cam.elevation = -20
     start_time = time.time()
     while viewer.is_running():
         step_start = time.time()

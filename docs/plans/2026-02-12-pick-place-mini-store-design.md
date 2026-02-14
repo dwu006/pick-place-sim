@@ -25,7 +25,7 @@
 ## Pipeline (Worker)
 
 1. **Planning** — Call Gemini to parse `natural_language_input` → `pick_list` (items from fixed inventory). Validate quantities and item IDs.
-2. **Picking** — Run mock "IK" simulator: for each (item, qty) emit WebSocket events (e.g. "moving_to_shelf", "picking", "placing") with small delays. No real physics; demonstrative only.
+2. **Picking** — Run mock "IK" simulator: for each (item, qty) emit WebSocket events (e.g. "moving_to_pick", "picking", "placing") with small delays. No real physics; demonstrative only.
 3. **Completed** — Set `status = completed`. Optionally store a short log of steps in Order or keep only in WebSocket for demo.
 
 ## Tech Stack

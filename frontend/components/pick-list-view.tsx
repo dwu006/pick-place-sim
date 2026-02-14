@@ -7,14 +7,14 @@ interface PickListViewProps {
 }
 
 const itemNames: Record<string, string> = {
-  apple: "Apple",
-  banana: "Banana",
-  water: "Water",
-  chips: "Chips",
-  soda: "Soda",
-  cookie: "Cookie",
-  sandwich: "Sandwich",
-  coffee: "Coffee",
+  red_block: "Red block",
+  blue_block: "Blue block",
+  green_block: "Green block",
+  cup: "Cup",
+  bottle: "Bottle",
+  toy: "Toy",
+  book: "Book",
+  box: "Box",
 };
 
 function nameFor(id: string): string {
@@ -24,7 +24,7 @@ function nameFor(id: string): string {
 export function PickListView({ pickList }: PickListViewProps) {
   if (!pickList || pickList.length === 0) {
     return (
-      <div className="text-sm text-stone-400 italic">No items parsed yet.</div>
+      <div className="text-sm text-stone-400 italic">No objects parsed yet.</div>
     );
   }
 

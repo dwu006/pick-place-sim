@@ -1,8 +1,8 @@
-# Mini Store — Pick & Place (AI Meets Robotics)
+# Cleanup Room — Pick & Place (AI Meets Robotics)
 
 ## Project Overview
 
-Mini Store is a **simulation-first pick-and-place** demo for the LabLab AI "Launch and Fund Your Own Startup – Edition 1" hackathon (AI Meets Robotics). The user says what they want in natural language; **Gemini** parses the request into a structured pick list; a **simulated robot** (hardcoded IK-style steps, no learning) picks items from inventory and "places" them in front of the user. The **backend runs on Vultr** as the central system of record.
+Cleanup Room is a **simulation-first pick-and-place** demo for the LabLab AI "Launch and Fund Your Own Startup – Edition 1" hackathon (AI Meets Robotics). The user says what to tidy in natural language; **Gemini** parses the request into a structured pick list; a **simulated robot** (hardcoded IK-style steps, no learning) picks objects from the room and places them in a bin. The **backend runs on Vultr** as the central system of record. The **MuJoCo sim** includes a room (floor, walls, table with scatter objects, bin).
 
 - **Track**: Robotic Interaction and Task Execution (Simulation-First)
 - **Sponsor tech**: Gemini (NL understanding, planning), Vultr (mandatory backend)
@@ -12,27 +12,27 @@ Mini Store is a **simulation-first pick-and-place** demo for the LabLab AI "Laun
 ### Pipeline
 
 ```
-User: "Two apples and a water"
+User: "Pick up the red block and the cup"
   → Frontend POST /api/orders
   → Backend (Vultr) enqueues order
   → Worker: Gemini parses NL → pick_list (item_id + quantity)
-  → Worker: Simulated pick-place (move_to_shelf → pick → move_to_delivery → place) per item
+  → Worker: Simulated pick-place (move_to_pick → pick → move_to_delivery → place) per object → bin
   → WebSocket: Real-time status + robot steps
-  → Frontend: Order list, pick list, live robot step log
+  → Frontend: Task list, objects to tidy, live robot step log
 ```
 
 ### Components
 
 1. **Backend (FastAPI)** — Central system of record. Runs on **Vultr**.
    - SQLite (async), REST API, WebSocket for live updates
-   - Gemini: natural language → structured order (pick list)
+   - Gemini: natural language → structured cleanup list (pick list)
    - In-process "simulator": scripted pick/place steps (no physics engine)
 
-2. **Frontend (Next.js)** — Web UI for ordering and monitoring.
-   - "What do you want?" input, order list, pick list, robot step log
+2. **Frontend (Next.js)** — Web UI for cleanup tasks and monitoring.
+   - "What should the robot clean up?" input, task list, objects to tidy, robot step log
    - Optional: deploy on Vultr (same VM) or Vercel with `NEXT_PUBLIC_API_BASE` pointing to Vultr backend
 
-3. **Store inventory** — Fixed list in code (e.g. apple, banana, water, chips, soda, cookie, sandwich, coffee). Gemini maps user phrases to these `item_id`s.
+3. **Room objects** — Fixed list in code (e.g. red_block, blue_block, green_block, cup, bottle, toy, book, box). Gemini maps user phrases to these `item_id`s. Robot places them in the bin.
 
 ## Key Files
 
@@ -40,7 +40,7 @@ User: "Two apples and a water"
 |------------|--------|
 | Backend    | `backend/main.py`, `backend/worker.py`, `backend/models.py`, `backend/schemas.py`, `backend/routers/orders.py`, `backend/routers/websocket.py` |
 | Services   | `backend/services/gemini_order_parser.py`, `backend/services/gemini_planner.py` (plan generation), `backend/services/gemini_robot_agent.py` (plan execution), `backend/services/pick_place_simulator.py` (fallback), `backend/order_store.py` |
-| Sim        | `backend/sim/` — MuJoCo Franka FR3 scene with table (optional; requires mujoco_menagerie) |
+| Sim        | `backend/sim/` — MuJoCo Franka scene with room (floor, walls, table, scatter objects, bin; optional; requires mujoco_menagerie). Optional: **object_sim** ([vikashplus/object_sim](https://github.com/vikashplus/object_sim)) for richer object meshes — clone into repo root; see `get_object_sim_path()`, `OBJECT_SIM_OBJECT_NAMES`, `backend/sim/preview_object_sim.py`. |
 | Frontend   | `frontend/app/page.tsx`, `frontend/components/order-input.tsx`, `frontend/components/order-list.tsx`, `frontend/components/robot-step-log.tsx`, `frontend/components/pick-list-view.tsx` |
 | Config     | `backend/config.py` (DB path, CORS, `GEMINI_API_KEY`) |
 
@@ -121,9 +121,13 @@ To show the Franka arm in simulation:
 2. **Install MuJoCo**: `pip install mujoco>=3.1.3`
 3. **Scene with table**: `backend/sim/` loads the menagerie’s `franka_fr3/scene.xml`, injects a table under the robot, and exposes `load_scene_with_table()` → `(model, data)`. Use this for a viewer or for feeding poses into the same pipeline later.
 
+## object_sim (optional)
+
+[object_sim](https://github.com/vikashplus/object_sim) provides MuJoCo models for daily objects (cup, mug, waterbottle, cubes, apple, rubberduck, etc.). Clone into the repo root: `git clone https://github.com/vikashplus/object_sim.git`. **Preview with real meshes:** object_sim includes `preview.py` that loads each object via `from_xml_path()` so mesh paths resolve. From repo root run: `python run_object_sim_preview.py -o cup` (one object) or `python run_object_sim_preview.py` (cycle all; requires `click`). Lightweight single-object viewer: `python -m backend.sim.preview_object_sim cup`. The main room scene uses primitives (no STL) so it always renders; use the preview scripts to see object_sim meshes.
+
 ## Gemini doing the work (plan-first approach)
 
-By default, **Gemini generates the full pick-place plan upfront** (plan-first, better than function calling). For each order, Gemini receives the pick list and outputs a structured plan: `{"steps": [{"step": "move_to_shelf", "item_id": "apple", "message": "..."}, ...], "reasoning": "..."}`. The backend then executes this plan step-by-step, broadcasting each action. This approach:
+By default, **Gemini generates the full pick-place plan upfront** (plan-first, better than function calling). For each task, Gemini receives the pick list and outputs a structured plan: `{"steps": [{"step": "move_to_pick", "item_id": "red_block", "message": "..."}, ...], "reasoning": "..."}`. The backend then executes this plan step-by-step, broadcasting each action. This approach:
 - **Single API call** (faster, cheaper than function calling)
 - **Shows Gemini's reasoning** (the "reasoning" field explains the strategy)
 - **Deterministic execution** (plan is generated once, then executed reliably)

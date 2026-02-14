@@ -44,7 +44,7 @@ interface OrderListProps {
 export function OrderList({ orders, activeOrderId, onSelect }: OrderListProps) {
   return (
     <div className="space-y-2">
-      <h2 className="text-sm font-semibold text-stone-700">Recent orders</h2>
+      <h2 className="text-sm font-semibold text-stone-700">Recent tasks</h2>
       <ul className="space-y-1.5 max-h-64 overflow-y-auto">
         {orders.map((order) => {
           const config = statusConfig[order.status];

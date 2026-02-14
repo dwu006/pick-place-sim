@@ -17,7 +17,7 @@ interface RobotStepLogProps {
 }
 
 const stepIcons: Record<string, typeof Package> = {
-  move_to_shelf: Package,
+  move_to_pick: Package,
   pick: Package,
   move_to_delivery: ArrowRight,
   place: Check,

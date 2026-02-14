@@ -45,7 +45,7 @@ async def run_pick_place_with_gemini(
 
     # Execute plan step-by-step
     delays = {
-        "move_to_shelf": 0.8,
+        "move_to_pick": 0.8,
         "pick": 0.6,
         "move_to_delivery": 0.7,
         "place": 0.4,
@@ -67,4 +67,4 @@ async def run_pick_place_with_gemini(
         )
         await asyncio.sleep(delays.get(step_name, 0.5))
 
-    await broadcast(order_id, {"type": "robot_step", "step": "done", "message": "Order ready."})
+    await broadcast(order_id, {"type": "robot_step", "step": "done", "message": "Cleanup done."})

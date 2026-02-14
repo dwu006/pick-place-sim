@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ShoppingBag, Bot, Sparkles } from "lucide-react";
+import { LayoutGrid, Bot, Sparkles } from "lucide-react";
 import { OrderInput } from "@/components/order-input";
 import { OrderList } from "@/components/order-list";
 import { PickListView } from "@/components/pick-list-view";
@@ -16,7 +16,7 @@ interface StepEntry {
   at: number;
 }
 
-export default function MiniStorePage() {
+export default function CleanupRoomPage() {
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [robotSteps, setRobotSteps] = useState<StepEntry[]>([]);
 
@@ -56,14 +56,14 @@ export default function MiniStorePage() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center shadow-md">
-              <ShoppingBag className="w-5 h-5 text-white" />
+              <LayoutGrid className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-stone-800 tracking-tight">
-                Mini Store
+                Cleanup Room
               </h1>
               <p className="text-xs text-stone-500 -mt-0.5">
-                Say what you want — robot picks & places
+                Say what to tidy — robot picks up & puts in bin
               </p>
             </div>
           </div>
@@ -74,7 +74,7 @@ export default function MiniStorePage() {
             </span>
             <span className="flex items-center gap-1.5">
               <Bot className="w-4 h-4 text-blue-500" />
-              Sim pick & place
+              Sim pick & place in bin
             </span>
           </div>
         </div>
@@ -115,7 +115,7 @@ export default function MiniStorePage() {
           <div className="col-span-3 space-y-6">
             <section className="rounded-2xl border-2 border-stone-100 bg-white p-5">
               <h2 className="text-sm font-semibold text-stone-700 mb-3">
-                Your order
+                Objects to tidy
               </h2>
               {activeOrder ? (
                 <>
@@ -125,7 +125,7 @@ export default function MiniStorePage() {
                   <PickListView pickList={activeOrder.pick_list} />
                 </>
               ) : (
-                <p className="text-sm text-stone-400">Select an order.</p>
+                <p className="text-sm text-stone-400">Select a task.</p>
               )}
             </section>
             {activeOrder?.error_message && (

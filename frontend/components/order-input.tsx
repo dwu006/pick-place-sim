@@ -21,14 +21,14 @@ export function OrderInput({ onSubmit, isLoading }: OrderInputProps) {
   return (
     <div className="space-y-3">
       <label className="text-sm font-medium text-stone-600">
-        What do you want?
+        What should the robot clean up?
       </label>
       <div className="relative">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder='e.g. "Two apples and a water" or "I need a sandwich and coffee"'
+          placeholder='e.g. "Pick up the red block and the cup" or "Tidy the toys and the bottle"'
           className={cn(
             "w-full px-4 py-3 pr-12 rounded-xl border-2 text-stone-800 placeholder:text-stone-400",
             "focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all",

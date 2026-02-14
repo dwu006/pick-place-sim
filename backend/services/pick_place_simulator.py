@@ -12,20 +12,20 @@ logger = logging.getLogger(__name__)
 async def run_pick_place(order_id: str, pick_list: List[PickListItem]) -> None:
     """
     Run a simulated pick-and-place sequence. For each item we emit
-    steps (move to shelf -> pick -> move to table -> place) with short delays.
+    steps (move to pick -> pick -> move to delivery -> place) with short delays.
     No real IK; this is demonstrative for the hackathon.
     """
     for idx, line in enumerate(pick_list):
         for q in range(line.quantity):
-            # Step 1: Move to shelf
+            # Step 1: Move to pick
             await broadcast(
                 order_id,
                 {
                     "type": "robot_step",
-                    "step": "move_to_shelf",
+                    "step": "move_to_pick",
                     "item_id": line.item_id,
                     "quantity_index": q + 1,
-                    "message": f"Moving to shelf for {line.item_id}",
+                    "message": f"Moving to {line.item_id}",
                 },
             )
             await asyncio.sleep(0.8)
@@ -49,7 +49,7 @@ async def run_pick_place(order_id: str, pick_list: List[PickListItem]) -> None:
                     "type": "robot_step",
                     "step": "move_to_delivery",
                     "item_id": line.item_id,
-                    "message": f"Placing {line.item_id} in front of you",
+                    "message": f"Taking {line.item_id} to bin",
                 },
             )
             await asyncio.sleep(0.7)
@@ -66,4 +66,4 @@ async def run_pick_place(order_id: str, pick_list: List[PickListItem]) -> None:
             )
             await asyncio.sleep(0.4)
 
-    await broadcast(order_id, {"type": "robot_step", "step": "done", "message": "Order ready."})
+    await broadcast(order_id, {"type": "robot_step", "step": "done", "message": "Cleanup done."})

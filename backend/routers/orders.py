@@ -7,15 +7,16 @@ from schemas import OrderCreateRequest, OrderResponse, StoreItem
 
 router = APIRouter()
 
-STORE_ITEMS = [
-    StoreItem(id="apple", name="Apple", description="Fresh apple"),
-    StoreItem(id="banana", name="Banana", description="Fresh banana"),
-    StoreItem(id="water", name="Water bottle", description="Bottled water"),
-    StoreItem(id="chips", name="Chips", description="Crispy chips"),
-    StoreItem(id="soda", name="Soda", description="Can of soda"),
-    StoreItem(id="cookie", name="Cookie", description="Cookie"),
-    StoreItem(id="sandwich", name="Sandwich", description="Sandwich"),
-    StoreItem(id="coffee", name="Coffee", description="Coffee"),
+# Room objects the robot can pick up and put in the bin (must match gemini_order_parser ROOM_OBJECT_IDS)
+ROOM_OBJECTS = [
+    StoreItem(id="red_block", name="Red block", description="Red block on table"),
+    StoreItem(id="blue_block", name="Blue block", description="Blue block on table"),
+    StoreItem(id="green_block", name="Green block", description="Green block on table"),
+    StoreItem(id="cup", name="Cup", description="Cup on table"),
+    StoreItem(id="bottle", name="Bottle", description="Bottle on table"),
+    StoreItem(id="toy", name="Toy", description="Toy to tidy"),
+    StoreItem(id="book", name="Book", description="Book to tidy"),
+    StoreItem(id="box", name="Box", description="Box to tidy"),
 ]
 
 
@@ -56,4 +57,5 @@ async def get_order(order_id: str):
 
 @router.get("/store/items", response_model=List[StoreItem])
 async def list_store_items():
-    return STORE_ITEMS
+    """List room objects that can be picked up (cleanup task)."""
+    return ROOM_OBJECTS

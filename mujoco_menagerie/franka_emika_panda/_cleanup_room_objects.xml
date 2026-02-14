@@ -1,0 +1,105 @@
+<mujoco model="panda scene">
+  <include file="panda.xml"/>
+
+  <statistic center="0.3 0 0.4" extent="1"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="120" elevation="-20"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+      <mesh name="room_obj_banana" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/banana/banana.stl"/>
+    <mesh name="room_obj_duck" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/duck/duck.stl"/>
+    <mesh name="room_obj_phone" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/phone/phone.stl"/>
+    <mesh name="room_obj_elephant" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/elephant/elephant.stl"/>
+    <mesh name="room_obj_eyeglasses" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/eyeglasses/eyeglasses.stl"/>
+    <mesh name="room_obj_flute" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/flute/flute.stl"/>
+    <mesh name="room_obj_gamecontroller" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/gamecontroller/gamecontroller.stl"/>
+    <mesh name="room_obj_headphones" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/headphones/headphones.stl"/>
+    <mesh name="room_obj_mouse" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/mouse/mouse.stl"/>
+    <mesh name="room_obj_piggybank" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/piggybank/piggybank.stl"/>
+    <mesh name="room_obj_pyramidlarge" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/pyramidlarge/pyramidlarge.stl"/>
+    <mesh name="room_obj_stanfordbunny" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/stanfordbunny/stanfordbunny.stl"/>
+    <mesh name="room_obj_train" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/train/train.stl"/>
+    <mesh name="room_obj_watch" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/watch/watch.stl"/>
+    <mesh name="room_obj_airplane" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/airplane/airplane.stl"/>
+    <mesh name="room_obj_alarmclock" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/alarmclock/alarmclock.stl"/>
+    <mesh name="room_obj_camera" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/camera/camera.stl"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+  
+    <!-- Box as floor (robot base), x,y in [-0.9, 0.9], top at z = 0.30 -->
+    <body name="shop_box" pos="0 0 -0.05">
+      <geom name="shop_box_geom" type="box" size="0.9 0.9 0.35" rgba="0.55 0.45 0.35 1"/>
+    </body>
+    <body name="obj_banana" pos="-0.405 -0.498 0.323">
+      <geom name="obj_banana_g" type="mesh" mesh="room_obj_banana" rgba="0.95 0.88 0.25 1"/>
+    </body>
+    <body name="obj_duck" pos="0.706 -0.744 0.348">
+      <geom name="obj_duck_g" type="mesh" mesh="room_obj_duck" rgba="0.98 0.75 0.2 1"/>
+    </body>
+    <body name="obj_phone" pos="-0.506 0.010 0.325">
+      <geom name="obj_phone_g" type="mesh" mesh="room_obj_phone" rgba="0.18 0.18 0.22 1"/>
+    </body>
+    <body name="obj_elephant" pos="-0.503 0.161 0.350">
+      <geom name="obj_elephant_g" type="mesh" mesh="room_obj_elephant" rgba="0.5 0.5 0.55 1"/>
+    </body>
+    <body name="obj_eyeglasses" pos="0.550 0.357 0.322">
+      <geom name="obj_eyeglasses_g" type="mesh" mesh="room_obj_eyeglasses" rgba="0.25 0.25 0.3 1"/>
+    </body>
+    <body name="obj_flute" pos="-0.288 -0.620 0.308">
+      <geom name="obj_flute_g" type="mesh" mesh="room_obj_flute" rgba="0.75 0.65 0.45 1"/>
+    </body>
+    <body name="obj_gamecontroller" pos="-0.733 -0.726 0.325">
+      <geom name="obj_gamecontroller_g" type="mesh" mesh="room_obj_gamecontroller" rgba="0.2 0.2 0.25 1"/>
+    </body>
+    <body name="obj_headphones" pos="0.625 0.187 0.329">
+      <geom name="obj_headphones_g" type="mesh" mesh="room_obj_headphones" rgba="0.22 0.22 0.26 1"/>
+    </body>
+    <body name="obj_mouse" pos="0.368 -0.818 0.320">
+      <geom name="obj_mouse_g" type="mesh" mesh="room_obj_mouse" rgba="0.35 0.35 0.4 1"/>
+    </body>
+    <body name="obj_piggybank" pos="-0.490 -0.379 0.368">
+      <geom name="obj_piggybank_g" type="mesh" mesh="room_obj_piggybank" rgba="0.95 0.5 0.55 1"/>
+    </body>
+    <body name="obj_pyramidlarge" pos="-0.756 -0.481 0.350">
+      <geom name="obj_pyramidlarge_g" type="mesh" mesh="room_obj_pyramidlarge" rgba="0.85 0.6 0.2 1"/>
+    </body>
+    <body name="obj_stanfordbunny" pos="-0.419 0.786 0.363">
+      <geom name="obj_stanfordbunny_g" type="mesh" mesh="room_obj_stanfordbunny" rgba="0.95 0.92 0.88 1"/>
+    </body>
+    <body name="obj_train" pos="-0.592 0.412 0.342">
+      <geom name="obj_train_g" type="mesh" mesh="room_obj_train" rgba="0.25 0.41 0.87 1"/>
+    </body>
+    <body name="obj_watch" pos="-0.606 -0.217 0.341">
+      <geom name="obj_watch_g" type="mesh" mesh="room_obj_watch" rgba="0.87 0.85 0.8 1"/>
+    </body>
+    <body name="obj_airplane" pos="0.617 0.497 0.325">
+      <geom name="obj_airplane_g" type="mesh" mesh="room_obj_airplane" rgba="0.7 0.75 0.8 1"/>
+    </body>
+    <body name="obj_alarmclock" pos="0.746 -0.074 0.354">
+      <geom name="obj_alarmclock_g" type="mesh" mesh="room_obj_alarmclock" rgba="0.9 0.25 0.2 1"/>
+    </body>
+    <body name="obj_camera" pos="0.152 0.716 0.334">
+      <geom name="obj_camera_g" type="mesh" mesh="room_obj_camera" rgba="0.2 0.2 0.22 1"/>
+    </body>
+    <!-- Bin on box (base at 0.30) -->
+    <body name="room_bin" pos="0.5 -0.35 0.32">
+      <geom name="bin_base" type="box" size="0.12 0.12 0.02" rgba="0.35 0.35 0.38 1"/>
+      <geom name="bin_wall_n" type="box" size="0.12 0.01 0.1" pos="0 0.11 0.06" rgba="0.4 0.4 0.42 1"/>
+      <geom name="bin_wall_s" type="box" size="0.12 0.01 0.1" pos="0 -0.11 0.06" rgba="0.4 0.4 0.42 1"/>
+      <geom name="bin_wall_e" type="box" size="0.01 0.12 0.1" pos="0.11 0 0.06" rgba="0.4 0.4 0.42 1"/>
+      <geom name="bin_wall_w" type="box" size="0.01 0.12 0.1" pos="-0.11 0 0.06" rgba="0.4 0.4 0.42 1"/>
+    </body>
+
+  </worldbody>
+</mujoco>

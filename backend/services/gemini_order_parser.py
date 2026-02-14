@@ -1,4 +1,4 @@
-"""Parse natural language store orders into structured pick lists using Gemini."""
+"""Parse natural language cleanup requests into structured pick lists using Gemini."""
 import json
 import logging
 from typing import List
@@ -13,34 +13,35 @@ logger = logging.getLogger(__name__)
 
 client = genai.Client(api_key=settings.gemini_api_key)
 
-# Fixed store inventory — item_id must match these
-STORE_INVENTORY = {
-    "apple": "Apple",
-    "banana": "Banana",
-    "water": "Water bottle",
-    "chips": "Chips",
-    "soda": "Soda",
-    "cookie": "Cookie",
-    "sandwich": "Sandwich",
-    "coffee": "Coffee",
+# Room objects the robot can pick up and put in the bin — item_id must match these
+ROOM_OBJECTS = {
+    "red_block": "Red block",
+    "blue_block": "Blue block",
+    "green_block": "Green block",
+    "cup": "Cup",
+    "bottle": "Bottle",
+    "toy": "Toy",
+    "book": "Book",
+    "box": "Box",
 }
-INVENTORY_IDS = list(STORE_INVENTORY.keys())
+ROOM_OBJECT_IDS = list(ROOM_OBJECTS.keys())
 
-SYSTEM_PROMPT = f"""You are a mini store order parser. The user says what they want; you output a JSON list of items to pick.
+SYSTEM_PROMPT = f"""You are a cleanup-room task parser. The user says what to tidy or pick up; you output a JSON list of objects to pick up and put in the bin.
 
-Available items (use these exact item_id values): {json.dumps(INVENTORY_IDS)}
+Available objects (use these exact item_id values): {json.dumps(ROOM_OBJECT_IDS)}
 
 Output a JSON array of objects, each with:
-- "item_id": one of the available item IDs (string)
-- "quantity": positive integer
+- "item_id": one of the available object IDs (string)
+- "quantity": positive integer (how many of that object to pick up)
 
 Examples:
-- "I want two apples and a water" -> [{{"item_id": "apple", "quantity": 2}}, {{"item_id": "water", "quantity": 1}}]
-- "Give me a coffee and 3 cookies" -> [{{"item_id": "coffee", "quantity": 1}}, {{"item_id": "cookie", "quantity": 3}}]
-- "Just a sandwich" -> [{{"item_id": "sandwich", "quantity": 1}}]
+- "Pick up the red block and the cup" -> [{{"item_id": "red_block", "quantity": 1}}, {{"item_id": "cup", "quantity": 1}}]
+- "Tidy the blue block and two bottles" -> [{{"item_id": "blue_block", "quantity": 1}}, {{"item_id": "bottle", "quantity": 2}}]
+- "Clean up the toys and the book" -> [{{"item_id": "toy", "quantity": 1}}, {{"item_id": "book", "quantity": 1}}]
+- "Put the green block in the bin" -> [{{"item_id": "green_block", "quantity": 1}}]
 
 Rules:
-- Only include items from the available list. If the user asks for something not in the list, skip it or map to the closest match (e.g. "drink" -> water or soda).
+- Only include objects from the available list. Map common words to the list (e.g. "red cube" -> red_block, "mug" -> cup, "bottle" -> bottle).
 - Respond ONLY with a valid JSON array. No markdown, no extra text."""
 
 PICK_LIST_SCHEMA = {
@@ -72,17 +73,17 @@ async def parse_order(natural_language_input: str) -> List[PickListItem]:
         raw = json.loads(response.text)
         if not isinstance(raw, list):
             raw = [raw]
-        # Validate and filter to known inventory
+        # Validate and filter to known room objects
         result = []
         for obj in raw:
             item_id = (obj.get("item_id") or "").strip().lower()
             qty = max(1, int(obj.get("quantity") or 1))
-            if item_id in INVENTORY_IDS:
+            if item_id in ROOM_OBJECT_IDS:
                 result.append(PickListItem(item_id=item_id, quantity=qty))
         if not result:
-            result = [PickListItem(item_id="apple", quantity=1)]
-        logger.info("Gemini order parse: %s -> %s", natural_language_input, result)
+            result = [PickListItem(item_id="red_block", quantity=1)]
+        logger.info("Gemini cleanup parse: %s -> %s", natural_language_input, result)
         return result
     except Exception as e:
         logger.error("Gemini order parser failed: %s", e)
-        return [PickListItem(item_id="apple", quantity=1)]
+        return [PickListItem(item_id="red_block", quantity=1)]
