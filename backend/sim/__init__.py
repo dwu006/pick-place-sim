@@ -77,11 +77,12 @@ _OBJECT_SIM_TABLE_ITEMS = [
     ("camera", "camera.stl", "0.2 0.2 0.22 1"),
 ]
 
-# Box platform: x,y in [-BOX_MARGIN, BOX_MARGIN]. Exclude robot base and bin.
+# Box platform: Objects must be within robot reach (~0.7m from origin).
 # Box top surface is z=0.30; each object's z is computed so mesh bottom sits on the surface.
 _BOX_HALF = 0.9
 _BOX_TOP_SURFACE = 0.30
-_ROBOT_BASE_MARGIN = 0.45   # keep objects outside |x|<0.45, |y|<0.45
+_ROBOT_BASE_MARGIN = 0.35   # keep objects outside |x|<0.35, |y|<0.35 (robot base)
+_ROBOT_MAX_REACH = 0.65     # max distance from origin for reliable picking
 _BIN_X_LO, _BIN_X_HI = 0.32, 0.68   # bin roughly at 0.5 ± 0.18
 _BIN_Y_LO, _BIN_Y_HI = -0.52, -0.18  # bin roughly at -0.35 ± 0.17
 _MIN_OBJECT_SEP = 0.12      # min distance between object centers
@@ -115,21 +116,23 @@ def _stl_mesh_z_min(filepath: str) -> float:
 
 
 def _random_positions_on_box(n: int, seed: Optional[int] = 42) -> list[tuple[float, float]]:
-    """Return n random (x, y) positions on the box top, avoiding robot base and bin. Z is set per-object from mesh."""
+    """Return n random (x, y) positions on the box top, within robot reach, avoiding robot base and bin."""
     rng = random.Random(seed)
     out: list[tuple[float, float]] = []
     max_attempts = n * 200
     attempts = 0
     while len(out) < n and attempts < max_attempts:
         attempts += 1
-        x = rng.uniform(-_BOX_HALF, _BOX_HALF)
-        y = rng.uniform(-_BOX_HALF, _BOX_HALF)
-        if abs(x) < _ROBOT_BASE_MARGIN and abs(y) < _ROBOT_BASE_MARGIN:
+        x = rng.uniform(-_ROBOT_MAX_REACH, _ROBOT_MAX_REACH)
+        y = rng.uniform(-_ROBOT_MAX_REACH, _ROBOT_MAX_REACH)
+        dist = (x**2 + y**2) ** 0.5
+        # Must be within reach but outside robot base
+        if dist < _ROBOT_BASE_MARGIN or dist > _ROBOT_MAX_REACH:
             continue
+        # Avoid bin area
         if _BIN_X_LO <= x <= _BIN_X_HI and _BIN_Y_LO <= y <= _BIN_Y_HI:
             continue
-        if abs(x) > _BOX_HALF - 0.08 or abs(y) > _BOX_HALF - 0.08:
-            continue
+        # Check separation from other objects
         too_close = False
         for (ox, oy) in out:
             if (x - ox) ** 2 + (y - oy) ** 2 < _MIN_OBJECT_SEP ** 2:
@@ -138,27 +141,29 @@ def _random_positions_on_box(n: int, seed: Optional[int] = 42) -> list[tuple[flo
         if too_close:
             continue
         out.append((x, y))
-    # fallback: spread in safe ring
+
+    # Fallback: place remaining objects in a ring pattern
+    import math
     while len(out) < n:
         i = len(out)
-        angle = (i * 2.0 * 3.14159 / max(n, 1)) + 0.5
-        r = _ROBOT_BASE_MARGIN + 0.2 + (i % 4) * 0.12
-        x = r * (1.0 if angle % 6.28 < 3.14 else -1.0) * 0.75
-        y = r * 0.75 * (1.0 if 1.57 < (angle % 6.28) < 4.71 else -1.0)
-        x = max(-_BOX_HALF + 0.08, min(_BOX_HALF - 0.08, x))
-        y = max(-_BOX_HALF + 0.08, min(_BOX_HALF - 0.08, y))
+        angle = (i * 2.0 * math.pi / max(n, 1)) + 0.3
+        # Alternate between inner and outer ring
+        r = _ROBOT_BASE_MARGIN + 0.15 + (i % 3) * 0.12
+        r = min(r, _ROBOT_MAX_REACH - 0.05)
+        x = r * math.cos(angle)
+        y = r * math.sin(angle)
+        # Avoid bin area
         if _BIN_X_LO <= x <= _BIN_X_HI and _BIN_Y_LO <= y <= _BIN_Y_HI:
-            y = _BIN_Y_HI + 0.06
+            y = _BIN_Y_HI + 0.08
         too_close = any(
             (x - ox) ** 2 + (y - oy) ** 2 < _MIN_OBJECT_SEP ** 2 for (ox, oy) in out
         )
         if not too_close:
             out.append((x, y))
         else:
-            x += 0.15 * (1 if x > 0 else -1)
-            y += 0.15 * (1 if y > 0 else -1)
-            x = max(-_BOX_HALF + 0.08, min(_BOX_HALF - 0.08, x))
-            y = max(-_BOX_HALF + 0.08, min(_BOX_HALF - 0.08, y))
+            # Shift slightly
+            x += 0.1 * math.cos(angle + 0.5)
+            y += 0.1 * math.sin(angle + 0.5)
             out.append((x, y))
     return out[:n]
 # Primitives fallback (name, geom type, size args, pos x y z, rgba)
