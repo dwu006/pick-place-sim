@@ -62,11 +62,10 @@ export function OrderList({ orders, activeOrderId, onSelect }: OrderListProps) {
           const Icon = config.icon;
           return (
             <li key={order.id}>
-              <button
-                type="button"
+              <div
                 onClick={() => onSelect(order.id)}
                 className={cn(
-                  "w-full text-left px-3 py-2.5 rounded-xl border-2 transition-all flex items-center gap-3",
+                  "w-full text-left px-3 py-2.5 rounded-xl border-2 transition-all flex items-center gap-3 cursor-pointer",
                   activeOrderId === order.id
                     ? "border-emerald-500 bg-emerald-50"
                     : "border-stone-100 hover:border-stone-200 hover:bg-stone-50"
@@ -103,7 +102,7 @@ export function OrderList({ orders, activeOrderId, onSelect }: OrderListProps) {
                 >
                   {copiedId === order.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
-              </button>
+              </div>
             </li>
           );
         })}
