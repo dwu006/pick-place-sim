@@ -297,13 +297,15 @@ class RobotController:
         """Update position of held object to follow gripper."""
         if self.held_object and self.held_object in self.object_body_ids:
             body_id = self.object_body_ids[self.held_object]
-            # Get end effector position (approximate from last link)
-            # For Franka, link8 is the end effector
-            ee_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "link8")
+            # Get end effector position - Franka uses "hand" body
+            ee_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "hand")
+            if ee_body_id < 0:
+                ee_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "link7")
             if ee_body_id >= 0:
                 ee_pos = self.data.xpos[ee_body_id].copy()
-                ee_pos[2] -= 0.05  # offset below gripper
+                ee_pos[2] -= 0.08  # offset below gripper fingers
                 self.model.body_pos[body_id] = ee_pos
+                mujoco.mj_forward(self.model, self.data)
 
     def reset_objects(self):
         """Reset all objects to their initial positions (as loaded from the scene)."""
