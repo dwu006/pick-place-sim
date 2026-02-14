@@ -2,8 +2,11 @@ from typing import Any, List
 
 from fastapi import APIRouter, HTTPException
 
+from config import settings
 from order_store import create_order as store_create_order, get_order as store_get_order, list_orders as store_list_orders
+from routers.websocket import broadcast_to_sim
 from schemas import OrderCreateRequest, OrderResponse, StoreItem
+from spawn_sim import spawn_sim_client
 
 router = APIRouter()
 
@@ -38,6 +41,10 @@ def _to_response(order: Any) -> OrderResponse:
 @router.post("/orders", response_model=OrderResponse, status_code=201)
 async def create_order(req: OrderCreateRequest):
     order = await store_create_order(req.natural_language_input)
+    order_id = order.id if hasattr(order, "id") else order["id"]
+    await broadcast_to_sim(order_id)
+    if getattr(settings, "spawn_sim_client", False):
+        spawn_sim_client(order_id=order_id)
     return _to_response(order)
 
 

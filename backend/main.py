@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from config import settings
 from database import engine
 from models import Base
-from routers import orders, websocket
+from routers import orders, sim, websocket
 from worker import start_worker
 
 logging.basicConfig(level=logging.INFO)
@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
         pass
 
 
-app = FastAPI(title="Mini Store Pick & Place API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Clean Up Pick & Place API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,12 +42,13 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.include_router(orders.router, prefix="/api", tags=["orders"])
+app.include_router(sim.router, prefix="/api/sim", tags=["sim"])
 app.include_router(websocket.router, tags=["websocket"])
 
 
 @app.get("/")
 def root():
-    return {"message": "Mini Store Pick & Place API v1.0", "status": "operational"}
+    return {"message": "Clean Up Pick & Place API v1.0", "status": "operational"}
 
 
 @app.get("/health")

@@ -233,6 +233,41 @@ def _room_table_objects_xml() -> str:
     return "\n".join(parts)
 
 
+# Opening tag of the hand body in panda.xml (insert wrist camera + visible marker as first children)
+# Hand quat (w,x,y,z)=(.9239,0,0,-.3827) ~ 45 deg around Z; so hand -Z is world down (0,0,-1).
+_HAND_BODY_OPEN = '<body name="hand" pos="0 0 0.107" quat="0.9238795 0 0 -0.3826834">'
+# Camera on wrist: same quat as ray (0 1 0 0 = 180 deg X) so it looks down at gripper; ray points down.
+_WRIST_CAMERA_INSERT = (
+    '<body name="hand" pos="0 0 0.107" quat="0.9238795 0 0 -0.3826834">\n'
+    '      <camera name="hand_camera" pos="0.04 0 -0.01" quat="0 1 0 0" fovy="60" resolution="640 480"/>\n'
+    '      <body name="hand_camera_marker" pos="0.04 0 -0.01">\n'
+    '        <geom name="hand_camera_vis" type="sphere" size="0.018" rgba="1 0 0 0.85" contype="0" conaffinity="0" group="2"/>\n'
+    '        <body name="hand_camera_ray" pos="0 0 0" quat="0 1 0 0">\n'
+    '          <geom name="hand_camera_look" type="cylinder" size="0.004 0.08" pos="0 0 -0.08" rgba="0 0.9 0 0.9" contype="0" conaffinity="0" group="2"/>\n'
+    '        </body>\n'
+    '      </body>'
+)
+
+
+def _ensure_panda_wrist_cam_xml(panda_dir: str) -> bool:
+    """Generate _panda_wrist_cam.xml with camera inside hand body. Returns True if successful."""
+    panda_path = os.path.join(panda_dir, "panda.xml")
+    out_path = os.path.join(panda_dir, "_panda_wrist_cam.xml")
+    if not os.path.isfile(panda_path):
+        return False
+    try:
+        with open(panda_path, "r") as f:
+            content = f.read()
+        if _HAND_BODY_OPEN not in content:
+            return False
+        content = content.replace(_HAND_BODY_OPEN, _WRIST_CAMERA_INSERT, 1)
+        with open(out_path, "w") as f:
+            f.write(content)
+        return True
+    except Exception:
+        return False
+
+
 def load_scene_with_table():
     """
     Load the Franka Emika Panda scene from mujoco_menagerie with a cleanup room.
@@ -255,6 +290,10 @@ def load_scene_with_table():
     # Read Panda scene
     with open(scene_path, "r") as f:
         xml_base = f.read()
+
+    # Use panda with wrist camera (camera inside hand body) if generation succeeds
+    if _ensure_panda_wrist_cam_xml(panda_dir):
+        xml_base = xml_base.replace('file="panda.xml"', 'file="_panda_wrist_cam.xml"')
 
     # Room structure: box, table, objects (object_sim meshes or primitives), bin
     obj_assets_xml, obj_bodies_xml = _object_sim_assets_and_bodies_xml(panda_dir)

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mini Store — Pick & Place",
+  title: "Clean Up — Pick & Place",
   description:
     "Say what you want. Gemini parses your order; a simulated robot picks and places items. AI Meets Robotics hackathon.",
 };

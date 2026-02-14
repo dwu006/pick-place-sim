@@ -60,6 +60,11 @@ Rules:
 Generate a complete plan with all steps. Include a brief "reasoning" field explaining your strategy."""
 
 
+def _model_for_plan() -> str:
+    """Use robotics model when set, else default Gemini model."""
+    return getattr(settings, "gemini_robotics_model", None) or settings.gemini_model
+
+
 async def plan_pick_place_sequence(pick_list: List[PickListItem]) -> dict:
     """
     Use Gemini to generate the full pick-place plan upfront.
@@ -67,10 +72,11 @@ async def plan_pick_place_sequence(pick_list: List[PickListItem]) -> dict:
     """
     pick_list_str = json.dumps([{"item_id": p.item_id, "quantity": p.quantity} for p in pick_list])
     prompt = f"Order to fulfill:\n{pick_list_str}\n\nGenerate the complete execution plan."
+    model = _model_for_plan()
 
     try:
         response = await client.aio.models.generate_content(
-            model="gemini-2.0-flash",
+            model=model,
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
@@ -84,6 +90,21 @@ async def plan_pick_place_sequence(pick_list: List[PickListItem]) -> dict:
         return plan
     except Exception as e:
         logger.error("Gemini planner failed: %s", e)
+        if model != settings.gemini_model:
+            try:
+                response = await client.aio.models.generate_content(
+                    model=settings.gemini_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        response_mime_type="application/json",
+                        response_schema=PLAN_SCHEMA,
+                        temperature=0.2,
+                    ),
+                )
+                return json.loads(response.text)
+            except Exception:
+                pass
         # Fallback: generate plan deterministically
         steps = []
         for item in pick_list:

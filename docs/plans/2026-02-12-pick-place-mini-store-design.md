@@ -1,11 +1,11 @@
-# Pick-and-Place Mini Store — Pivot Design
+# Pick-and-Place Clean Up — Pivot Design
 
 **Date:** 2026-02-12  
-**Context:** LabLab AI "Launch and Fund Your Own Startup – Edition 1" (AI Meets Robotics). Pivot from latte art to simulation-first pick-and-place mini store.
+**Context:** LabLab AI "Launch and Fund Your Own Startup – Edition 1" (AI Meets Robotics). Pivot from latte art to simulation-first pick-and-place Clean Up.
 
 ## Product Summary
 
-**Mini Store:** User says what they want in natural language. Gemini parses the request into a structured pick list. A simulated robot (hardcoded IK, no learning) picks items from inventory and places them in front of the user. Backend runs on **Vultr** as the central system of record; **Gemini** powers NL understanding and planning. Fits **Track 3: Robotic Interaction and Task Execution (Simulation-First)** and satisfies **Vultr** (backend on Vultr) and **Gemini** (AI for reasoning/planning) sponsor requirements.
+**Clean Up:** User says what they want in natural language. Gemini parses the request into a structured pick list. A simulated robot (hardcoded IK, no learning) picks items from inventory and places them in front of the user. Backend runs on **Vultr** as the central system of record; **Gemini** powers NL understanding and planning. Fits **Track 3: Robotic Interaction and Task Execution (Simulation-First)** and satisfies **Vultr** (backend on Vultr) and **Gemini** (AI for reasoning/planning) sponsor requirements.
 
 ## Architecture
 
@@ -35,7 +35,7 @@
 | Backend     | FastAPI, SQLite (async), WebSocket (existing pattern) |
 | NL / Planning | Gemini API (e.g. Gemini 2.0 Flash) — structured JSON output |
 | Simulation  | In-process Python: scripted steps + asyncio.sleep; optional 2D canvas on frontend for visualization |
-| Frontend    | Next.js 15, Tailwind; mini store UI: "What do you want?" + order list + active order + step feed |
+| Frontend    | Next.js 15, Tailwind; Clean Up UI: "What do you want?" + order list + active order + step feed |
 | Deployment  | Backend and (optionally) frontend on **Vultr** VM; env for `GEMINI_API_KEY` |
 
 ## What We Remove

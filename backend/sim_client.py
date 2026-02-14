@@ -2,6 +2,10 @@
 Real-time MuJoCo simulation client that connects to Vultr backend via WebSocket.
 Receives robot steps and moves the Franka arm in real-time.
 
+Object positions: Set when the scene loads (backend/sim uses random layout with seed 42,
+so same layout every run). The client reads actual positions from the model at startup.
+Use controller.reset_objects() to restore objects to initial positions.
+
 Usage:
   python sim_client.py <order_id> [--backend-url ws://YOUR_VULTR_IP:8000]
 
@@ -102,11 +106,12 @@ class RobotController:
         self.lock = threading.Lock()
         self.held_object = None  # Currently held object body id
         self.object_body_ids = {}  # name -> body id
+        self.initial_object_body_pos = {}  # body_id -> (x,y,z) for reset
 
         # Step simulation once to compute positions
         mujoco.mj_forward(model, data)
 
-        # Find object body positions
+        # Find object body positions and store initial positions for reset
         self._find_object_positions()
 
         # Initialize arm to home position
@@ -131,6 +136,8 @@ class RobotController:
                 pos = self.data.xpos[body_id].copy()
                 if pos[0] != 0 or pos[1] != 0 or pos[2] != 0:
                     OBJECT_POSITIONS[obj_name] = list(pos)
+                # Store initial position for reset (model.body_pos is the canonical source)
+                self.initial_object_body_pos[body_id] = self.model.body_pos[body_id].copy()
 
         # Print all object positions
         print(f"  Loaded {len(OBJECT_POSITIONS)} objects:")
@@ -235,6 +242,17 @@ class RobotController:
                 ee_pos[2] -= 0.05  # offset below gripper
                 self.model.body_pos[body_id] = ee_pos
 
+    def reset_objects(self):
+        """Reset all objects to their initial positions (as loaded from the scene)."""
+        for body_id, pos in self.initial_object_body_pos.items():
+            self.model.body_pos[body_id][:] = pos
+        mujoco.mj_forward(self.model, self.data)
+        # Refresh OBJECT_POSITIONS so IK targets are correct
+        for obj_name, body_id in self.object_body_ids.items():
+            OBJECT_POSITIONS[obj_name] = list(self.data.xpos[body_id])
+        self.held_object = None
+        print("  Objects reset to initial positions.")
+
     def add_step(self, step_type: str, item_id: str, message: str):
         """Add a robot step to the queue."""
         with self.lock:
@@ -325,8 +343,8 @@ class RobotController:
             return len(self.step_queue) > 0
 
 
-async def websocket_listener(url: str, order_id: str, controller: RobotController):
-    """Connect to backend WebSocket and receive robot steps."""
+async def websocket_listener(url: str, order_id: str, controller: RobotController) -> bool:
+    """Connect to backend WebSocket and receive robot steps. Returns True when order_complete, False on error/disconnect."""
     ws_url = f"{url}/ws/{order_id}"
     print(f"Connecting to WebSocket: {ws_url}")
 
@@ -336,6 +354,9 @@ async def websocket_listener(url: str, order_id: str, controller: RobotControlle
             async for message in ws:
                 try:
                     msg = json.loads(message)
+                    if msg.get("type") == "order_complete":
+                        print("Order complete.")
+                        return True
                     if msg.get("type") == "robot_step":
                         step = msg.get("step", "")
                         item_id = msg.get("item_id", "")
@@ -344,8 +365,34 @@ async def websocket_listener(url: str, order_id: str, controller: RobotControlle
                         controller.add_step(step, item_id, message_text)
                 except json.JSONDecodeError:
                     print(f"Invalid JSON: {message}")
+        return False
     except Exception as e:
         print(f"WebSocket error: {e}")
+        return False
+
+
+async def wait_for_orders_loop(url: str, controller: RobotController):
+    """Connect to /ws/sim and run each order when the backend sends new_order."""
+    sim_ws_url = f"{url}/ws/sim"
+    print(f"Connecting to sim channel: {sim_ws_url}")
+    while True:
+        try:
+            async with websockets.connect(sim_ws_url) as ws_sim:
+                print("Sim connected. Submit a task on the frontend to run the robot.")
+                async for message in ws_sim:
+                    try:
+                        msg = json.loads(message)
+                        if msg.get("type") == "new_order":
+                            order_id = msg.get("order_id")
+                            if order_id:
+                                print(f"\n--- New order: {order_id} ---")
+                                await websocket_listener(url, order_id, controller)
+                                controller.reset_objects()
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as e:
+            print(f"Sim channel error: {e}")
+        await asyncio.sleep(2)
 
 
 def run_simulation(controller: RobotController, model, data):
@@ -382,11 +429,16 @@ def run_simulation(controller: RobotController, model, data):
             camera = mujoco.MjvCamera()
             option = mujoco.MjvOption()
 
-            # Set camera
-            camera.lookat[:] = [0.0, 0.0, 0.35]
-            camera.distance = 2.5
-            camera.azimuth = 135
-            camera.elevation = -25
+            # Use robot hand camera if present, else free camera
+            hand_cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "hand_camera")
+            if hand_cam_id >= 0:
+                camera.type = mujoco.mjtCamera.mjCAMERA_FIXED
+                camera.fixedcamid = hand_cam_id
+            else:
+                camera.lookat[:] = [0.0, 0.0, 0.35]
+                camera.distance = 2.5
+                camera.azimuth = 135
+                camera.elevation = -25
 
             # Mouse state for camera control
             last_x, last_y = 0, 0
@@ -466,10 +518,15 @@ def run_simulation(controller: RobotController, model, data):
     else:
         # Non-macOS: use launch_passive
         with mujoco.viewer.launch_passive(model, data) as viewer:
-            viewer.cam.lookat[:] = [0.0, 0.0, 0.35]
-            viewer.cam.distance = 2.5
-            viewer.cam.azimuth = 135
-            viewer.cam.elevation = -25
+            hand_cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "hand_camera")
+            if hand_cam_id >= 0:
+                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
+                viewer.cam.fixedcamid = hand_cam_id
+            else:
+                viewer.cam.lookat[:] = [0.0, 0.0, 0.35]
+                viewer.cam.distance = 2.5
+                viewer.cam.azimuth = 135
+                viewer.cam.elevation = -25
 
             while viewer.is_running():
                 step_start = time.time()
@@ -516,9 +573,10 @@ def _run_headless(controller, model, data):
 
 def main():
     parser = argparse.ArgumentParser(description="MuJoCo simulation client for Vultr backend")
-    parser.add_argument("order_id", nargs="?", help="Order ID to subscribe to (or 'demo' for local demo)")
+    parser.add_argument("order_id", nargs="?", help="Order ID to subscribe to (or use --wait to get orders from frontend)")
     parser.add_argument("--backend-url", default="ws://localhost:8000", help="Backend WebSocket URL")
     parser.add_argument("--demo", action="store_true", help="Run demo mode without backend connection")
+    parser.add_argument("--wait", action="store_true", help="Connect to /ws/sim; run each order when user submits on frontend")
     args = parser.parse_args()
 
     print("Loading MuJoCo scene...")
@@ -533,7 +591,7 @@ def main():
     # Create controller
     controller = RobotController(model, data)
 
-    if args.demo or not args.order_id:
+    if args.demo or (not args.order_id and not args.wait):
         # Demo mode: add some test steps
         print("\n=== DEMO MODE ===")
         print("Adding test steps...")
@@ -553,13 +611,27 @@ def main():
             controller.add_step("done", "", "Done!")
 
         run_simulation(controller, model, data)
+    elif args.wait:
+        # Wait mode: scene is already loaded; listen for orders from frontend
+        print("\n=== WAIT MODE ===")
+        print("Scene loaded. Submit a task on the frontend to run the robot.")
+        print(f"Backend: {args.backend_url}\n")
+
+        def ws_thread():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(wait_for_orders_loop(args.backend_url, controller))
+
+        thread = threading.Thread(target=ws_thread, daemon=True)
+        thread.start()
+
+        run_simulation(controller, model, data)
     else:
-        # Live mode: connect to backend
+        # Live mode: single order
         print(f"\n=== LIVE MODE ===")
         print(f"Order ID: {args.order_id}")
         print(f"Backend: {args.backend_url}")
 
-        # Start WebSocket listener in background thread
         def ws_thread():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -570,7 +642,6 @@ def main():
         thread = threading.Thread(target=ws_thread, daemon=True)
         thread.start()
 
-        # Run simulation in main thread
         run_simulation(controller, model, data)
 
 

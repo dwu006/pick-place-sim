@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { LayoutGrid, Bot, Sparkles } from "lucide-react";
 import { OrderInput } from "@/components/order-input";
 import { OrderList } from "@/components/order-list";
@@ -8,6 +8,7 @@ import { PickListView } from "@/components/pick-list-view";
 import { RobotStepLog } from "@/components/robot-step-log";
 import { useCreateOrder, useOrder, useOrders } from "@/lib/hooks/use-orders";
 import { useOrderWebSocket } from "@/lib/hooks/use-websocket";
+import { startSim } from "@/lib/api";
 
 interface StepEntry {
   step: string;
@@ -37,6 +38,10 @@ export default function CleanupRoomPage() {
   }, []);
 
   useOrderWebSocket(activeOrderId, handleWsMessage);
+
+  useEffect(() => {
+    startSim().catch(() => {});
+  }, []);
 
   const handleSubmit = async (input: string) => {
     const order = await createOrder.mutateAsync(input);

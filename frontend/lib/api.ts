@@ -45,3 +45,8 @@ export async function getOrder(orderId: string): Promise<Order> {
 export async function listOrders(): Promise<Order[]> {
   return request("/orders");
 }
+
+/** Ask backend to start the MuJoCo sim (waiting mode). Scene loads once; robot runs when you submit a task. */
+export async function startSim(): Promise<{ status: string; message?: string }> {
+  return request("/sim/start", { method: "POST" });
+}

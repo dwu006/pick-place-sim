@@ -66,11 +66,17 @@ PICK_LIST_SCHEMA = {
 }
 
 
+def _model_for_parse() -> str:
+    """Use robotics model when set, else default Gemini model."""
+    return getattr(settings, "gemini_robotics_model", None) or settings.gemini_model
+
+
 async def parse_order(natural_language_input: str) -> List[PickListItem]:
     """Use Gemini to parse natural language into a validated pick list."""
+    model = _model_for_parse()
     try:
         response = await client.aio.models.generate_content(
-            model="gemini-2.0-flash",
+            model=model,
             contents=f"User request: {natural_language_input}",
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
@@ -95,4 +101,29 @@ async def parse_order(natural_language_input: str) -> List[PickListItem]:
         return result
     except Exception as e:
         logger.error("Gemini order parser failed: %s", e)
+        if model != settings.gemini_model:
+            try:
+                response = await client.aio.models.generate_content(
+                    model=settings.gemini_model,
+                    contents=f"User request: {natural_language_input}",
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        response_mime_type="application/json",
+                        response_schema=PICK_LIST_SCHEMA,
+                        temperature=0.2,
+                    ),
+                )
+                raw = json.loads(response.text)
+                if not isinstance(raw, list):
+                    raw = [raw]
+                result = []
+                for obj in raw:
+                    item_id = (obj.get("item_id") or "").strip().lower()
+                    qty = max(1, int(obj.get("quantity") or 1))
+                    if item_id in ROOM_OBJECT_IDS:
+                        result.append(PickListItem(item_id=item_id, quantity=qty))
+                if result:
+                    return result
+            except Exception:
+                pass
         return [PickListItem(item_id="duck", quantity=1)]
