@@ -174,15 +174,21 @@ class RobotController:
             print(f"    {obj_name}: [{pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}]")
 
     def _set_arm_qpos(self, qpos):
-        """Set arm joint positions directly."""
-        # Franka has 7 arm joints + 2 gripper joints
-        for i, q in enumerate(qpos[:7]):
-            self.data.qpos[i] = q
-        # Gripper
+        """Set arm joint positions using actuators (ctrl), not qpos directly."""
+        # Franka has 8 actuators: 7 for arm joints + 1 for gripper (split tendon)
+        # actuator1-7 control joints 1-7, actuator8 controls gripper
+
+        # Set arm joint actuators (ctrl[0:7] -> joints 1-7)
+        for i in range(min(7, len(qpos))):
+            self.data.ctrl[i] = qpos[i]
+
+        # Set gripper actuator - actuator8 uses ctrlrange [0, 255]
+        # qpos[7] and qpos[8] are finger positions (0 to 0.04)
+        # Map finger position to actuator: 0.04 -> 255 (open), 0 -> 0 (closed)
         if len(qpos) > 7:
-            self.data.qpos[7] = qpos[7]
-            self.data.qpos[8] = qpos[8]
-        mujoco.mj_forward(self.model, self.data)
+            gripper_pos = qpos[7]  # finger position 0 to 0.04
+            gripper_ctrl = (gripper_pos / 0.04) * 255  # map to 0-255
+            self.data.ctrl[7] = gripper_ctrl
 
     def _get_arm_qpos(self):
         """Get current arm joint positions."""
