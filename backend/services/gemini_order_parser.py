@@ -13,16 +13,25 @@ logger = logging.getLogger(__name__)
 
 client = genai.Client(api_key=settings.gemini_api_key)
 
-# Room objects the robot can pick up and put in the bin — item_id must match these
+# Room objects the robot can pick up and put in the bin — item_id must match simulation objects
 ROOM_OBJECTS = {
-    "red_block": "Red block",
-    "blue_block": "Blue block",
-    "green_block": "Green block",
-    "cup": "Cup",
-    "bottle": "Bottle",
-    "toy": "Toy",
-    "book": "Book",
-    "box": "Box",
+    "banana": "Banana",
+    "duck": "Rubber duck toy",
+    "phone": "Phone",
+    "elephant": "Elephant toy",
+    "eyeglasses": "Eyeglasses",
+    "flute": "Flute",
+    "gamecontroller": "Game controller",
+    "headphones": "Headphones",
+    "mouse": "Computer mouse",
+    "piggybank": "Piggy bank",
+    "pyramidlarge": "Pyramid toy",
+    "stanfordbunny": "Bunny toy",
+    "train": "Toy train",
+    "watch": "Watch",
+    "airplane": "Toy airplane",
+    "alarmclock": "Alarm clock",
+    "camera": "Camera",
 }
 ROOM_OBJECT_IDS = list(ROOM_OBJECTS.keys())
 
@@ -35,13 +44,13 @@ Output a JSON array of objects, each with:
 - "quantity": positive integer (how many of that object to pick up)
 
 Examples:
-- "Pick up the red block and the cup" -> [{{"item_id": "red_block", "quantity": 1}}, {{"item_id": "cup", "quantity": 1}}]
-- "Tidy the blue block and two bottles" -> [{{"item_id": "blue_block", "quantity": 1}}, {{"item_id": "bottle", "quantity": 2}}]
-- "Clean up the toys and the book" -> [{{"item_id": "toy", "quantity": 1}}, {{"item_id": "book", "quantity": 1}}]
-- "Put the green block in the bin" -> [{{"item_id": "green_block", "quantity": 1}}]
+- "Pick up the banana and the duck" -> [{{"item_id": "banana", "quantity": 1}}, {{"item_id": "duck", "quantity": 1}}]
+- "Clean up the toys" -> [{{"item_id": "duck", "quantity": 1}}, {{"item_id": "elephant", "quantity": 1}}, {{"item_id": "train", "quantity": 1}}, {{"item_id": "airplane", "quantity": 1}}]
+- "Put the phone and headphones in the bin" -> [{{"item_id": "phone", "quantity": 1}}, {{"item_id": "headphones", "quantity": 1}}]
+- "Tidy up all the clutter" -> [{{"item_id": "banana", "quantity": 1}}, {{"item_id": "duck", "quantity": 1}}, {{"item_id": "phone", "quantity": 1}}, {{"item_id": "elephant", "quantity": 1}}, {{"item_id": "eyeglasses", "quantity": 1}}, {{"item_id": "flute", "quantity": 1}}, {{"item_id": "gamecontroller", "quantity": 1}}, {{"item_id": "headphones", "quantity": 1}}, {{"item_id": "mouse", "quantity": 1}}, {{"item_id": "piggybank", "quantity": 1}}, {{"item_id": "pyramidlarge", "quantity": 1}}, {{"item_id": "stanfordbunny", "quantity": 1}}, {{"item_id": "train", "quantity": 1}}, {{"item_id": "watch", "quantity": 1}}, {{"item_id": "airplane", "quantity": 1}}, {{"item_id": "alarmclock", "quantity": 1}}, {{"item_id": "camera", "quantity": 1}}]
 
 Rules:
-- Only include objects from the available list. Map common words to the list (e.g. "red cube" -> red_block, "mug" -> cup, "bottle" -> bottle).
+- Only include objects from the available list. Map common words to the list (e.g. "rubber ducky" -> duck, "toy bunny" -> stanfordbunny, "controller" -> gamecontroller).
 - Respond ONLY with a valid JSON array. No markdown, no extra text."""
 
 PICK_LIST_SCHEMA = {
@@ -81,9 +90,9 @@ async def parse_order(natural_language_input: str) -> List[PickListItem]:
             if item_id in ROOM_OBJECT_IDS:
                 result.append(PickListItem(item_id=item_id, quantity=qty))
         if not result:
-            result = [PickListItem(item_id="red_block", quantity=1)]
+            result = [PickListItem(item_id="duck", quantity=1)]
         logger.info("Gemini cleanup parse: %s -> %s", natural_language_input, result)
         return result
     except Exception as e:
         logger.error("Gemini order parser failed: %s", e)
-        return [PickListItem(item_id="red_block", quantity=1)]
+        return [PickListItem(item_id="duck", quantity=1)]

@@ -28,7 +28,7 @@ export function OrderInput({ onSubmit, isLoading }: OrderInputProps) {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder='e.g. "Pick up the red block and the cup" or "Tidy the toys and the bottle"'
+          placeholder='e.g. "Pick up the duck and banana" or "Clean up all the toys"'
           className={cn(
             "w-full px-4 py-3 pr-12 rounded-xl border-2 text-stone-800 placeholder:text-stone-400",
             "focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all",
