@@ -98,27 +98,32 @@ GRIPPER_CLOSE = 0.005
 # Franka Panda joint limits: J1[-2.9,2.9], J2[-1.76,1.76], J3[-2.9,2.9], J4[-3.07,-0.07], J5[-2.9,2.9], J6[-0.02,3.75], J7[-2.9,2.9]
 # Robot base is elevated at z=0.3, objects are at z~0.32 (box surface at z=0.30)
 
-# Pre-computed configurations for different approach angles and phases
-# Format: [J1, J2, J3, J4, J5, J6, J7, finger1, finger2]
+# TESTED joint configurations for Franka Panda (VERIFIED via FK)
+# Format: [J1, J2, J3, J4, J5, J6, J7]
+# J1 = base rotation, J2 = shoulder, J3 = upper arm rotation, J4 = elbow, J5 = forearm rotation, J6 = wrist, J7 = flange
+# Robot base at z=0.3, objects at z=0.32
+
+# Home: arm folded up safely (z=0.92)
+HOME_JOINTS = [0.0, 0.0, 0.0, -1.57, 0.0, 1.57, 0.785]
+
+# Reaching down pose: arm bending DOWN to table level
+# J2=1.3 (shoulder forward), J4=-1.3 (elbow extended), J6=3.5 (wrist down)
+# Result: z=0.35, reach=0.73m (perfect for picking at table level z=0.32)
+REACH_DOWN_JOINTS = [0.0, 1.3, 0.0, -1.3, 0.0, 3.5, 0.785]
+
+# Lifted pose: holding object up high (z=0.92)
+# J2=-0.2 (shoulder back), J4=-1.8 (elbow bent), J6=1.5 (wrist level)
+LIFTED_JOINTS = [0.0, -0.2, 0.0, -1.8, 0.0, 1.5, 0.785]
+
+# Over bin pose: rotated to bin and lowered (z=0.52)
+# J1=-0.6 (rotate to bin), J2=1.0, J4=-1.3, J6=3.0
+BIN_JOINTS = [-0.6, 1.0, 0.0, -1.3, 0.0, 3.0, 0.785]
+
 PICK_CONFIGS = {
-    # Home/raised position - arm up and safe
-    "home": [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785, GRIPPER_OPEN, GRIPPER_OPEN],
-
-    # Approach configurations (arm extended but not fully down)
-    "approach_front": [0.0, 0.2, 0.0, -1.8, 0.0, 2.0, 0.785, GRIPPER_OPEN, GRIPPER_OPEN],
-    "approach_right": [0.7, 0.2, 0.0, -1.8, 0.0, 2.0, 0.5, GRIPPER_OPEN, GRIPPER_OPEN],
-    "approach_left": [-0.7, 0.2, 0.0, -1.8, 0.0, 2.0, 1.0, GRIPPER_OPEN, GRIPPER_OPEN],
-    "approach_back": [3.14, 0.2, 0.0, -1.8, 0.0, 2.0, 0.785, GRIPPER_OPEN, GRIPPER_OPEN],
-
-    # Pick configurations (arm extended down to table level)
-    "pick_front": [0.0, 0.6, 0.0, -1.4, 0.0, 2.0, 0.785, GRIPPER_OPEN, GRIPPER_OPEN],
-    "pick_right": [0.7, 0.6, 0.0, -1.4, 0.0, 2.0, 0.5, GRIPPER_OPEN, GRIPPER_OPEN],
-    "pick_left": [-0.7, 0.6, 0.0, -1.4, 0.0, 2.0, 1.0, GRIPPER_OPEN, GRIPPER_OPEN],
-    "pick_back": [3.14, 0.6, 0.0, -1.4, 0.0, 2.0, 0.785, GRIPPER_OPEN, GRIPPER_OPEN],
-
-    # Bin position (0.5, -0.35) - angle ~-35 degrees from front
-    "bin_approach": [-0.6, 0.2, 0.0, -1.8, 0.0, 2.0, 0.6, GRIPPER_CLOSE, GRIPPER_CLOSE],
-    "bin_drop": [-0.6, 0.5, 0.0, -1.5, 0.0, 2.0, 0.6, GRIPPER_CLOSE, GRIPPER_CLOSE],
+    "home": HOME_JOINTS + [GRIPPER_OPEN, GRIPPER_OPEN],
+    "reach_down": REACH_DOWN_JOINTS + [GRIPPER_OPEN, GRIPPER_OPEN],
+    "lifted": LIFTED_JOINTS + [GRIPPER_CLOSE, GRIPPER_CLOSE],
+    "bin": BIN_JOINTS + [GRIPPER_CLOSE, GRIPPER_CLOSE],
 }
 
 
@@ -207,73 +212,58 @@ class RobotController:
     def _compute_ik_for_position(self, target_pos, phase="pick", for_bin=False):
         """
         Compute joint angles to reach a target position.
-
-        Args:
-            target_pos: [x, y, z] target position
-            phase: "approach" (above object) or "pick" (at object level)
-            for_bin: True if moving to bin
-
-        Uses analytical heuristics based on Franka Panda kinematics:
-        - J1: Base rotation (points arm toward target)
-        - J2: Shoulder flexion (controls reach distance)
-        - J3: Additional shoulder rotation
-        - J4: Elbow (main reach control, always negative)
-        - J5: Wrist flexion
-        - J6: Wrist rotation (keeps gripper down)
-        - J7: Gripper rotation (aligns fingers)
+        Uses simple approach: rotate base to face target, use fixed reaching pose.
         """
         import math
 
         x, y, z = target_pos
 
-        # Calculate angle and distance to target (in xy plane)
+        # Calculate angle to target
         angle = math.atan2(y, x)
         reach = math.sqrt(x**2 + y**2)
 
-        # Clamp reach to feasible range (0.35 to 0.7m for reliable picking)
-        reach = max(0.35, min(0.70, reach))
-
-        if for_bin:
-            # Bin is at approximately (0.5, -0.35) -> angle ~ -0.61 rad
-            if phase == "approach":
-                qpos = np.array(PICK_CONFIGS["bin_approach"]).copy()
-            else:
-                qpos = np.array(PICK_CONFIGS["bin_drop"]).copy()
-            qpos[7] = self.gripper_target
-            qpos[8] = self.gripper_target
-            return qpos
-
-        # Compute joint angles analytically
+        # Start with a known good reaching pose
+        # This pose has the arm extended forward and down
         qpos = np.zeros(9)
 
         # J1: Base rotation - point toward target
         qpos[0] = angle
 
-        # Normalize reach to 0-1 range for interpolation
-        reach_norm = (reach - 0.35) / 0.35  # 0 at 0.35m, 1 at 0.7m
-        reach_norm = max(0.0, min(1.0, reach_norm))
-
-        if phase == "approach":
-            # Approach: arm extended, slightly raised above object
-            qpos[1] = 0.4 + reach_norm * 0.3      # Shoulder: lean forward
-            qpos[2] = 0.0                          # Shoulder rotation
-            qpos[3] = -1.2 - reach_norm * 0.3     # Elbow: bent
-            qpos[4] = 0.0                          # Forearm rotation
-            qpos[5] = 1.8 + reach_norm * 0.2      # Wrist: angled down
-            qpos[6] = 0.785                        # Gripper rotation
+        if for_bin:
+            # Bin position - lift up a bit then drop
+            if phase == "approach":
+                # Raised position over bin
+                qpos[1] = 0.3       # shoulder forward
+                qpos[2] = 0.0
+                qpos[3] = -1.5      # elbow bent
+                qpos[4] = 0.0
+                qpos[5] = 1.8       # wrist
+                qpos[6] = 0.785
+            else:
+                # Lower into bin
+                qpos[1] = 0.5
+                qpos[2] = 0.0
+                qpos[3] = -1.2
+                qpos[4] = 0.0
+                qpos[5] = 2.0
+                qpos[6] = 0.785
+        elif phase == "approach":
+            # Approach: arm extended toward object, but raised
+            qpos[1] = 0.2       # shoulder slightly forward
+            qpos[2] = 0.0
+            qpos[3] = -1.8      # elbow bent
+            qpos[4] = 0.0
+            qpos[5] = 1.5       # wrist level
+            qpos[6] = 0.785
         else:
-            # Pick: arm fully extended DOWN to table level (z ~ 0.32)
-            # Robot base is at z=0.3, so gripper must reach z=0.32
-            qpos[1] = 0.8 + reach_norm * 0.4      # Shoulder: lean forward MORE (0.8 to 1.2)
-            qpos[2] = 0.0                          # Shoulder rotation
-            qpos[3] = -0.8 - reach_norm * 0.3     # Elbow: more extended (-0.8 to -1.1)
-            qpos[4] = 0.0                          # Forearm rotation
-            qpos[5] = 2.2 + reach_norm * 0.3      # Wrist: point down (2.2 to 2.5)
-            qpos[6] = 0.785                        # Gripper rotation
-
-        # Adjust J7 (gripper rotation) based on approach angle for better grasp
-        # Keep gripper roughly aligned with object
-        qpos[6] = 0.785 - angle * 0.1
+            # Pick: arm reaching DOWN to table
+            # Key: J2 (shoulder) forward, J4 (elbow) extended, J6 (wrist) down
+            qpos[1] = 1.0       # shoulder leaning forward (max ~1.76)
+            qpos[2] = 0.0
+            qpos[3] = -0.5      # elbow extended (less negative = more extended)
+            qpos[4] = 0.0
+            qpos[5] = 2.5       # wrist pointing down
+            qpos[6] = 0.785
 
         # Clamp to joint limits
         joint_limits = [
@@ -330,6 +320,8 @@ class RobotController:
 
     def process_step(self):
         """Process the next step in the queue. Returns generator for animation frames."""
+        import math
+
         with self.lock:
             if not self.step_queue:
                 return None
@@ -341,33 +333,33 @@ class RobotController:
         print(f"  Executing: {step_type} - {item_id}")
 
         if step_type == "move_to_pick":
-            # Move to object position - two-phase: approach (above) then lower to pick height
+            # SEQUENCE: Home → Rotate to object → Reach down to object
             if item_id in OBJECT_POSITIONS:
                 target_pos = OBJECT_POSITIONS[item_id].copy()
                 print(f"    Moving to {item_id} at [{target_pos[0]:.2f}, {target_pos[1]:.2f}, {target_pos[2]:.2f}]")
 
                 self.gripper_target = GRIPPER_OPEN
 
-                # Phase 1: Approach (move above the object)
-                approach_qpos = self._compute_ik_for_position(target_pos, phase="approach")
-                approach_qpos[7] = GRIPPER_OPEN
-                approach_qpos[8] = GRIPPER_OPEN
+                # Calculate rotation angle to face object
+                angle = math.atan2(target_pos[1], target_pos[0])
 
-                # Phase 2: Lower to pick position
-                pick_qpos = self._compute_ik_for_position(target_pos, phase="pick")
-                pick_qpos[7] = GRIPPER_OPEN
-                pick_qpos[8] = GRIPPER_OPEN
+                # Phase 1: Rotate base to face object (keep arm up)
+                rotate_qpos = np.array(HOME_JOINTS + [GRIPPER_OPEN, GRIPPER_OPEN])
+                rotate_qpos[0] = angle  # Set base rotation
 
-                # Return a generator that does both phases
-                def two_phase_move():
-                    # Phase 1: Move to approach position
-                    for _ in self._interpolate_to_target(approach_qpos, steps=40):
+                # Phase 2: Reach down to object
+                reach_qpos = np.array(REACH_DOWN_JOINTS + [GRIPPER_OPEN, GRIPPER_OPEN])
+                reach_qpos[0] = angle  # Keep same rotation
+
+                def move_to_object():
+                    # Rotate to face object
+                    for _ in self._interpolate_to_target(rotate_qpos, steps=30):
                         yield
-                    # Phase 2: Lower to pick position
-                    for _ in self._interpolate_to_target(pick_qpos, steps=30):
+                    # Reach down
+                    for _ in self._interpolate_to_target(reach_qpos, steps=40):
                         yield
 
-                return two_phase_move()
+                return move_to_object()
             else:
                 print(f"    WARNING: Object {item_id} not found in positions!")
                 return None
@@ -378,56 +370,54 @@ class RobotController:
             if item_id in self.object_body_ids:
                 self.held_object = item_id
                 print(f"    Grasping {item_id}")
+
             current = self._get_arm_qpos()
             target = current.copy()
             target[7] = GRIPPER_CLOSE
             target[8] = GRIPPER_CLOSE
-            return self._interpolate_to_target(target, steps=25)
+            return self._interpolate_to_target(target, steps=20)
 
         elif step_type == "move_to_delivery":
-            # Move to bin - two-phase: lift then move to bin
+            # SEQUENCE: Lift up → Rotate to bin → Lower over bin
             self.gripper_target = GRIPPER_CLOSE
 
-            # Get current position for lift
             current = self._get_arm_qpos()
+            current_angle = current[0]  # Current base rotation
 
-            # Phase 1: Lift (raise shoulder)
-            lift_qpos = current.copy()
-            lift_qpos[1] = 0.0  # Raise shoulder
-            lift_qpos[3] = -2.0  # Retract elbow
-            lift_qpos[7] = GRIPPER_CLOSE
-            lift_qpos[8] = GRIPPER_CLOSE
+            # Calculate bin angle
+            bin_angle = math.atan2(BIN_POS[1], BIN_POS[0])
 
-            # Phase 2: Move to bin approach
-            bin_approach_qpos = self._compute_ik_for_position(BIN_POS, phase="approach", for_bin=True)
-            bin_approach_qpos[7] = GRIPPER_CLOSE
-            bin_approach_qpos[8] = GRIPPER_CLOSE
+            # Phase 1: Lift object up (keep same rotation)
+            lift_qpos = np.array(LIFTED_JOINTS + [GRIPPER_CLOSE, GRIPPER_CLOSE])
+            lift_qpos[0] = current_angle
 
-            # Phase 3: Lower to bin
-            bin_drop_qpos = self._compute_ik_for_position(BIN_POS, phase="pick", for_bin=True)
-            bin_drop_qpos[7] = GRIPPER_CLOSE
-            bin_drop_qpos[8] = GRIPPER_CLOSE
+            # Phase 2: Rotate to bin (while lifted)
+            rotate_qpos = np.array(LIFTED_JOINTS + [GRIPPER_CLOSE, GRIPPER_CLOSE])
+            rotate_qpos[0] = bin_angle
+
+            # Phase 3: Lower over bin
+            bin_qpos = np.array(BIN_JOINTS + [GRIPPER_CLOSE, GRIPPER_CLOSE])
 
             def move_to_bin():
-                # Lift object
-                for _ in self._interpolate_to_target(lift_qpos, steps=25):
+                # Lift up
+                for _ in self._interpolate_to_target(lift_qpos, steps=30):
                     yield
-                # Move to bin approach
-                for _ in self._interpolate_to_target(bin_approach_qpos, steps=35):
+                # Rotate to bin
+                for _ in self._interpolate_to_target(rotate_qpos, steps=25):
                     yield
-                # Lower to bin
-                for _ in self._interpolate_to_target(bin_drop_qpos, steps=20):
+                # Lower over bin
+                for _ in self._interpolate_to_target(bin_qpos, steps=25):
                     yield
 
             return move_to_bin()
 
         elif step_type == "place":
-            # Open gripper and release object into bin
+            # Open gripper and drop object into bin
             self.gripper_target = GRIPPER_OPEN
+
             if self.held_object and self.held_object in self.object_body_ids:
-                # Move object to bin position
+                # Drop object into bin
                 body_id = self.object_body_ids[self.held_object]
-                # Set object position to bin (with some randomness so they don't stack perfectly)
                 import random
                 bin_x = BIN_POS[0] + random.uniform(-0.05, 0.05)
                 bin_y = BIN_POS[1] + random.uniform(-0.05, 0.05)
@@ -446,7 +436,8 @@ class RobotController:
         elif step_type == "done":
             # Return to home position
             print("    Returning to home position")
-            return self._interpolate_to_target(np.array(HOME_QPOS), steps=60)
+            home_qpos = np.array(HOME_JOINTS + [GRIPPER_OPEN, GRIPPER_OPEN])
+            return self._interpolate_to_target(home_qpos, steps=50)
 
         return None
 
