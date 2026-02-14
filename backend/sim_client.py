@@ -553,7 +553,7 @@ async def wait_for_orders_loop(url: str, controller: RobotController):
                                     if ok:
                                         print("Wrist image sent to backend.")
                                 await websocket_listener(url, order_id, controller)
-                                controller.reset_objects()
+                                # Don't reset - objects stay in bin after being dropped
                     except json.JSONDecodeError:
                         pass
         except Exception as e:
