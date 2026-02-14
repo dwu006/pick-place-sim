@@ -41,17 +41,7 @@ async def broadcast_to_sim(order_id: str):
         sim_subscribers.discard(ws)
 
 
-@router.websocket("/ws/{order_id}")
-async def order_websocket(websocket: WebSocket, order_id: str):
-    await websocket.accept()
-    connections.setdefault(order_id, set()).add(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        connections.get(order_id, set()).discard(websocket)
-
-
+# IMPORTANT: /ws/sim MUST be defined BEFORE /ws/{order_id} to avoid route conflict
 @router.websocket("/ws/sim")
 async def sim_websocket(websocket: WebSocket):
     """Channel for sim clients waiting for orders. Backend sends new_order when user submits a task."""
@@ -64,3 +54,14 @@ async def sim_websocket(websocket: WebSocket):
     except WebSocketDisconnect:
         sim_subscribers.discard(websocket)
         logger.info(f"Sim client disconnected. Total sim_subscribers: {len(sim_subscribers)}")
+
+
+@router.websocket("/ws/{order_id}")
+async def order_websocket(websocket: WebSocket, order_id: str):
+    await websocket.accept()
+    connections.setdefault(order_id, set()).add(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        connections.get(order_id, set()).discard(websocket)
