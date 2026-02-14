@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    cors_origins: List[str] = ["http://localhost:3000"]
+    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:3001", "http://172.59.212.103", "*"]
     database_url: str = "sqlite+aiosqlite:///./ministore.db"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3-flash-preview"
