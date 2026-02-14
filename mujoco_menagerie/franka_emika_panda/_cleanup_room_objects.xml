@@ -14,23 +14,23 @@
     <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
       markrgb="0.8 0.8 0.8" width="300" height="300"/>
     <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
-      <mesh name="room_obj_banana" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/banana/banana.stl"/>
-    <mesh name="room_obj_duck" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/duck/duck.stl"/>
-    <mesh name="room_obj_phone" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/phone/phone.stl"/>
-    <mesh name="room_obj_elephant" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/elephant/elephant.stl"/>
-    <mesh name="room_obj_eyeglasses" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/eyeglasses/eyeglasses.stl"/>
-    <mesh name="room_obj_flute" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/flute/flute.stl"/>
-    <mesh name="room_obj_gamecontroller" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/gamecontroller/gamecontroller.stl"/>
-    <mesh name="room_obj_headphones" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/headphones/headphones.stl"/>
-    <mesh name="room_obj_mouse" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/mouse/mouse.stl"/>
-    <mesh name="room_obj_piggybank" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/piggybank/piggybank.stl"/>
-    <mesh name="room_obj_pyramidlarge" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/pyramidlarge/pyramidlarge.stl"/>
-    <mesh name="room_obj_stanfordbunny" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/stanfordbunny/stanfordbunny.stl"/>
-    <mesh name="room_obj_train" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/train/train.stl"/>
-    <mesh name="room_obj_watch" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/watch/watch.stl"/>
-    <mesh name="room_obj_airplane" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/airplane/airplane.stl"/>
-    <mesh name="room_obj_alarmclock" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/alarmclock/alarmclock.stl"/>
-    <mesh name="room_obj_camera" file="C:/Users/happy/Documents/Coding/pick-place-sim/object_sim/camera/camera.stl"/>
+      <mesh name="room_obj_banana" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/banana/banana.stl"/>
+    <mesh name="room_obj_duck" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/duck/duck.stl"/>
+    <mesh name="room_obj_phone" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/phone/phone.stl"/>
+    <mesh name="room_obj_elephant" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/elephant/elephant.stl"/>
+    <mesh name="room_obj_eyeglasses" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/eyeglasses/eyeglasses.stl"/>
+    <mesh name="room_obj_flute" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/flute/flute.stl"/>
+    <mesh name="room_obj_gamecontroller" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/gamecontroller/gamecontroller.stl"/>
+    <mesh name="room_obj_headphones" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/headphones/headphones.stl"/>
+    <mesh name="room_obj_mouse" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/mouse/mouse.stl"/>
+    <mesh name="room_obj_piggybank" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/piggybank/piggybank.stl"/>
+    <mesh name="room_obj_pyramidlarge" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/pyramidlarge/pyramidlarge.stl"/>
+    <mesh name="room_obj_stanfordbunny" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/stanfordbunny/stanfordbunny.stl"/>
+    <mesh name="room_obj_train" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/train/train.stl"/>
+    <mesh name="room_obj_watch" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/watch/watch.stl"/>
+    <mesh name="room_obj_airplane" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/airplane/airplane.stl"/>
+    <mesh name="room_obj_alarmclock" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/alarmclock/alarmclock.stl"/>
+    <mesh name="room_obj_camera" file="/Users/riddhima/Developer/Projects/pickAndDrop/pick-place-sim/object_sim/camera/camera.stl"/>
   </asset>
 
   <worldbody>
