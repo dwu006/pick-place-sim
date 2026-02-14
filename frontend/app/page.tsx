@@ -26,14 +26,13 @@ export default function CleanupRoomPage() {
 
   const handleWsMessage = useCallback((msg: Record<string, unknown>) => {
     if (msg.type === "robot_step" && typeof msg.message === "string") {
-      setRobotSteps((prev) =>
-        prev.concat({
-          step: (msg.step as string) ?? "",
-          item_id: msg.item_id as string | undefined,
-          message: msg.message,
-          at: Date.now(),
-        })
-      );
+      const newStep: StepEntry = {
+        step: String(msg.step ?? ""),
+        item_id: msg.item_id ? String(msg.item_id) : undefined,
+        message: msg.message,
+        at: Date.now(),
+      };
+      setRobotSteps((prev) => [...prev, newStep]);
     }
   }, []);
 
