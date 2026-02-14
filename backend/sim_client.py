@@ -209,63 +209,19 @@ class RobotController:
             self._set_arm_qpos(interp)
             yield
 
-    def _compute_ik_for_position(self, target_pos, phase="pick", for_bin=False):
+    def _solve_ik(self, target_pos, max_iterations=100, tolerance=0.01):
         """
-        Compute joint angles to reach a target position.
-        Uses simple approach: rotate base to face target, use fixed reaching pose.
+        Solve inverse kinematics using Jacobian pseudo-inverse method.
+        Returns joint angles that place the end effector at target_pos.
         """
         import math
 
-        x, y, z = target_pos
+        # Get end effector body ID
+        ee_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "hand")
+        if ee_body_id < 0:
+            ee_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "link7")
 
-        # Calculate angle to target
-        angle = math.atan2(y, x)
-        reach = math.sqrt(x**2 + y**2)
-
-        # Start with a known good reaching pose
-        # This pose has the arm extended forward and down
-        qpos = np.zeros(9)
-
-        # J1: Base rotation - point toward target
-        qpos[0] = angle
-
-        if for_bin:
-            # Bin position - lift up a bit then drop
-            if phase == "approach":
-                # Raised position over bin
-                qpos[1] = 0.3       # shoulder forward
-                qpos[2] = 0.0
-                qpos[3] = -1.5      # elbow bent
-                qpos[4] = 0.0
-                qpos[5] = 1.8       # wrist
-                qpos[6] = 0.785
-            else:
-                # Lower into bin
-                qpos[1] = 0.5
-                qpos[2] = 0.0
-                qpos[3] = -1.2
-                qpos[4] = 0.0
-                qpos[5] = 2.0
-                qpos[6] = 0.785
-        elif phase == "approach":
-            # Approach: arm extended toward object, but raised
-            qpos[1] = 0.2       # shoulder slightly forward
-            qpos[2] = 0.0
-            qpos[3] = -1.8      # elbow bent
-            qpos[4] = 0.0
-            qpos[5] = 1.5       # wrist level
-            qpos[6] = 0.785
-        else:
-            # Pick: arm reaching DOWN to table
-            # Key: J2 (shoulder) forward, J4 (elbow) extended, J6 (wrist) down
-            qpos[1] = 1.0       # shoulder leaning forward (max ~1.76)
-            qpos[2] = 0.0
-            qpos[3] = -0.5      # elbow extended (less negative = more extended)
-            qpos[4] = 0.0
-            qpos[5] = 2.5       # wrist pointing down
-            qpos[6] = 0.785
-
-        # Clamp to joint limits
+        # Joint limits for Franka Panda
         joint_limits = [
             (-2.8973, 2.8973),   # J1
             (-1.7628, 1.7628),   # J2
@@ -275,14 +231,70 @@ class RobotController:
             (-0.0175, 3.7525),   # J6
             (-2.8973, 2.8973),   # J7
         ]
+
+        # Start from a good initial guess: rotate to face target, use reaching pose
+        angle = math.atan2(target_pos[1], target_pos[0])
+        init_qpos = np.array([angle, 0.8, 0.0, -1.5, 0.0, 2.5, 0.785])
+
+        # Save current state
+        saved_qpos = self.data.qpos.copy()
+
+        # Set initial guess
         for i in range(7):
-            qpos[i] = max(joint_limits[i][0], min(joint_limits[i][1], qpos[i]))
+            self.data.qpos[i] = init_qpos[i]
+        mujoco.mj_forward(self.model, self.data)
 
-        # Set gripper
-        qpos[7] = self.gripper_target
-        qpos[8] = self.gripper_target
+        # Iterative IK using Jacobian
+        step_size = 0.5
+        for iteration in range(max_iterations):
+            # Get current end effector position
+            ee_pos = self.data.xpos[ee_body_id].copy()
 
-        return qpos
+            # Offset for gripper (target is where object is, ee is hand body)
+            ee_pos[2] -= 0.08  # Account for gripper length
+
+            # Compute error
+            error = target_pos - ee_pos
+            error_norm = np.linalg.norm(error)
+
+            if error_norm < tolerance:
+                # Success!
+                result = self.data.qpos[:7].copy()
+                # Restore state
+                self.data.qpos[:] = saved_qpos
+                mujoco.mj_forward(self.model, self.data)
+                return result
+
+            # Compute Jacobian for end effector position
+            jacp = np.zeros((3, self.model.nv))
+            jacr = np.zeros((3, self.model.nv))
+            mujoco.mj_jacBody(self.model, self.data, jacp, jacr, ee_body_id)
+
+            # Extract just the arm joints (first 7 columns)
+            J = jacp[:, :7]
+
+            # Compute pseudo-inverse
+            J_pinv = np.linalg.pinv(J)
+
+            # Compute joint velocity
+            dq = J_pinv @ error * step_size
+
+            # Update joints with clamping
+            for i in range(7):
+                new_q = self.data.qpos[i] + dq[i]
+                self.data.qpos[i] = max(joint_limits[i][0], min(joint_limits[i][1], new_q))
+
+            mujoco.mj_forward(self.model, self.data)
+
+        # If we didn't converge, still return the best we found
+        result = self.data.qpos[:7].copy()
+        # Restore state
+        self.data.qpos[:] = saved_qpos
+        mujoco.mj_forward(self.model, self.data)
+
+        final_ee = self.data.xpos[ee_body_id].copy()
+        print(f"    IK warning: converged to {np.linalg.norm(target_pos - final_ee):.3f}m error")
+        return result
 
     def update_held_object(self):
         """Update position of held object to follow gripper."""
@@ -333,13 +345,16 @@ class RobotController:
         print(f"  Executing: {step_type} - {item_id}")
 
         if step_type == "move_to_pick":
-            # SEQUENCE: Rotate to object → Reach down to EXACT object position
+            # Use IK to compute exact joint angles to reach the object
             if item_id in OBJECT_POSITIONS:
-                target_pos = OBJECT_POSITIONS[item_id].copy()
-                obj_dist = math.sqrt(target_pos[0]**2 + target_pos[1]**2)
-                print(f"    Moving to {item_id} at [{target_pos[0]:.2f}, {target_pos[1]:.2f}, {target_pos[2]:.2f}] (dist={obj_dist:.2f}m)")
+                target_pos = np.array(OBJECT_POSITIONS[item_id])
+                print(f"    Moving to {item_id} at [{target_pos[0]:.2f}, {target_pos[1]:.2f}, {target_pos[2]:.2f}]")
 
                 self.gripper_target = GRIPPER_OPEN
+
+                # Adjust target: gripper needs to be slightly above object to grasp it
+                grasp_target = target_pos.copy()
+                grasp_target[2] += 0.10  # 10cm above object center for grasping
 
                 # Calculate rotation angle to face object
                 angle = math.atan2(target_pos[1], target_pos[0])
@@ -348,38 +363,14 @@ class RobotController:
                 rotate_qpos = np.array(HOME_JOINTS + [GRIPPER_OPEN, GRIPPER_OPEN])
                 rotate_qpos[0] = angle
 
-                # Phase 2: Reach down - ADAPT joints based on object distance
-                # Objects closer need different joint angles than objects farther away
+                # Phase 2: Solve IK for exact object position
+                ik_joints = self._solve_ik(grasp_target)
                 reach_qpos = np.zeros(9)
-                reach_qpos[0] = angle  # Base rotation to face object
-                reach_qpos[2] = 0.0    # J3
-                reach_qpos[4] = 0.0    # J5
-                reach_qpos[6] = 0.785  # J7 wrist rotation
+                reach_qpos[:7] = ik_joints
                 reach_qpos[7] = GRIPPER_OPEN
                 reach_qpos[8] = GRIPPER_OPEN
 
-                # Distance-adaptive reaching (verified via FK testing)
-                # Each config targets z~0.35 at the specified reach distance
-                if obj_dist < 0.48:
-                    # Very close (0.40-0.48m): reach=0.42m, z=0.38
-                    reach_qpos[1] = 0.5    # J2 shoulder
-                    reach_qpos[3] = -2.5   # J4 elbow very bent
-                    reach_qpos[5] = 2.8    # J6 wrist
-                elif obj_dist < 0.55:
-                    # Close (0.48-0.55m): reach=0.49m, z=0.49 (slightly high but ok)
-                    reach_qpos[1] = 0.3
-                    reach_qpos[3] = -2.5
-                    reach_qpos[5] = 3.0
-                elif obj_dist < 0.62:
-                    # Medium (0.55-0.62m): reach=0.58m, z=0.35
-                    reach_qpos[1] = 0.8
-                    reach_qpos[3] = -2.0
-                    reach_qpos[5] = 2.8
-                else:
-                    # Far (0.62-0.75m): reach=0.73m, z=0.35
-                    reach_qpos[1] = 1.3
-                    reach_qpos[3] = -1.3
-                    reach_qpos[5] = 3.5
+                print(f"    IK solved: J1={ik_joints[0]:.2f} J2={ik_joints[1]:.2f} J4={ik_joints[3]:.2f} J6={ik_joints[5]:.2f}")
 
                 def move_to_object():
                     # Rotate to face object
@@ -416,35 +407,33 @@ class RobotController:
             return close_and_grab()
 
         elif step_type == "move_to_delivery":
-            # SEQUENCE: Lift up → Rotate to bin → Lower over bin
+            # SEQUENCE: Lift up → Move to bin position using IK
             self.gripper_target = GRIPPER_CLOSE
 
             current = self._get_arm_qpos()
-            current_angle = current[0]  # Current base rotation
-
-            # Calculate bin angle
-            bin_angle = math.atan2(BIN_POS[1], BIN_POS[0])
+            current_angle = current[0]
 
             # Phase 1: Lift object up (keep same rotation)
             lift_qpos = np.array(LIFTED_JOINTS + [GRIPPER_CLOSE, GRIPPER_CLOSE])
             lift_qpos[0] = current_angle
 
-            # Phase 2: Rotate to bin (while lifted)
-            rotate_qpos = np.array(LIFTED_JOINTS + [GRIPPER_CLOSE, GRIPPER_CLOSE])
-            rotate_qpos[0] = bin_angle
+            # Phase 2: Use IK to reach bin position
+            bin_target = np.array(BIN_POS)
+            bin_target[2] += 0.15  # 15cm above bin for safe drop
+            bin_ik_joints = self._solve_ik(bin_target)
+            bin_qpos = np.zeros(9)
+            bin_qpos[:7] = bin_ik_joints
+            bin_qpos[7] = GRIPPER_CLOSE
+            bin_qpos[8] = GRIPPER_CLOSE
 
-            # Phase 3: Lower over bin
-            bin_qpos = np.array(BIN_JOINTS + [GRIPPER_CLOSE, GRIPPER_CLOSE])
+            print(f"    Moving to bin at [{bin_target[0]:.2f}, {bin_target[1]:.2f}, {bin_target[2]:.2f}]")
 
             def move_to_bin():
-                # Lift up
+                # Lift up first
                 for _ in self._interpolate_to_target(lift_qpos, steps=30):
                     yield
-                # Rotate to bin
-                for _ in self._interpolate_to_target(rotate_qpos, steps=25):
-                    yield
-                # Lower over bin
-                for _ in self._interpolate_to_target(bin_qpos, steps=25):
+                # Move to bin using IK-solved position
+                for _ in self._interpolate_to_target(bin_qpos, steps=40):
                     yield
 
             return move_to_bin()
