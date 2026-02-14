@@ -31,17 +31,17 @@ export function useOrderWebSocket(
         const updated = { ...old };
         switch (msg.type) {
           case "status_update":
-            updated.status = msg.status;
+            updated.status = msg.status as Order["status"];
             break;
           case "pick_list_ready":
-            updated.pick_list = msg.pick_list;
+            updated.pick_list = msg.pick_list as Order["pick_list"];
             break;
           case "order_complete":
             updated.status = "completed";
             break;
           case "error":
             updated.status = "failed";
-            updated.error_message = msg.error;
+            updated.error_message = msg.error as string;
             break;
         }
         return updated;
