@@ -365,9 +365,9 @@ class RobotController:
 
                 self.gripper_target = GRIPPER_OPEN
 
-                # Adjust target: gripper needs to be slightly above object to grasp it
+                # Target the object directly - IK already accounts for gripper offset
                 grasp_target = target_pos.copy()
-                grasp_target[2] += 0.10  # 10cm above object center for grasping
+                grasp_target[2] += 0.02  # tiny offset for object height
 
                 # Calculate rotation angle to face object
                 angle = math.atan2(target_pos[1], target_pos[0])
