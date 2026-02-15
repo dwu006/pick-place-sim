@@ -28,9 +28,10 @@ const stepConfig: Record<string, { icon: typeof Package; color: string; bg: stri
 export function RobotStepLog({ steps, isActive }: RobotStepLogProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-  }, [steps.length]);
+  // Auto-scroll disabled to allow user to browse page while robot is active
+  // useEffect(() => {
+  //   endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  // }, [steps.length]);
 
   if (steps.length === 0 && !isActive) {
     return (
