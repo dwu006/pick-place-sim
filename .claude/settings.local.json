@@ -8,7 +8,12 @@
       "mcp__plugin_context7_context7__query-docs",
       "Bash(python -m json.tool:*)",
       "WebFetch(domain:ai.google.dev)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(ssh root@45.77.101.79 \"ps aux | grep uvicorn | grep -v grep\")",
+      "Bash(ssh:*)",
+      "Bash(source:*)",
+      "Bash(python sim_client.py:*)",
+      "Bash(git add:*)"
     ]
   }
 }

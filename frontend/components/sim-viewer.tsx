@@ -57,12 +57,12 @@ export function SimViewer() {
           <span className="text-xs text-white/60">{connected ? "Connected" : "Disconnected"}</span>
         </div>
       </div>
-      <div className="relative aspect-[4/3] bg-black flex items-center justify-center">
+      <div className="relative h-96 bg-black flex items-center justify-center">
         {frameData ? (
           <img
             src={`data:image/png;base64,${frameData}`}
             alt="Simulation view"
-            className="w-full h-full object-contain"
+            className="max-w-full max-h-full object-contain"
           />
         ) : (
           <div className="text-white/40 text-sm text-center p-8">

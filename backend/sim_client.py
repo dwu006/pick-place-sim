@@ -540,7 +540,7 @@ def _capture_viewer_frame(model, data, camera="default"):
         return None
     try:
         import base64
-        width, height = 640, 480
+        width, height = 480, 360  # Smaller for faster streaming
         renderer = mujoco.Renderer(model, height=height, width=width)
         renderer.update_scene(data, camera=camera)
         pixels = renderer.render()
@@ -835,7 +835,7 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
             frame_counter += 1
             if frame_counter == 1:
                 print(f"[DEBUG] Frame streaming active! Will send every 5th frame.")
-            if frame_counter % 5 == 0:  # Send every 5th frame
+            if frame_counter % 2 == 0:  # Send every 2nd frame (faster)
                 frame_data = _capture_viewer_frame(model, data, camera=-1)  # -1 = free camera
                 if frame_data:
                     print(f"[Frame] Captured and sending to {http_base}/api/sim/frame")
