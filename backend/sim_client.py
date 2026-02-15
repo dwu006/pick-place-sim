@@ -38,7 +38,8 @@ if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 
 # Set up EGL rendering for headless servers (must be set before importing mujoco)
-if 'DISPLAY' not in os.environ:
+import platform
+if 'DISPLAY' not in os.environ and platform.system() != "Windows":
     os.environ['MUJOCO_GL'] = 'egl'
 
 try:
@@ -729,6 +730,8 @@ def run_simulation(controller: RobotController, model, data, http_base: str = No
     # Check if we have a display - if not, use headless mode
     import platform
     has_display = os.environ.get('DISPLAY') is not None or platform.system() == "Windows"
+
+    print(f"[DEBUG] Platform: {platform.system()}, DISPLAY: {os.environ.get('DISPLAY')}, has_display: {has_display}")
 
     if not has_display or (enable_web_streaming and platform.system() == "Linux"):
         # No display available or Linux with web streaming - use headless mode
