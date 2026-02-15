@@ -836,7 +836,7 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
             if frame_counter == 1:
                 print(f"[DEBUG] Frame streaming active! Will send every 5th frame.")
             if frame_counter % 5 == 0:  # Send every 5th frame
-                frame_data = _capture_viewer_frame(model, data, camera="default")
+                frame_data = _capture_viewer_frame(model, data, camera=-1)  # -1 = free camera
                 if frame_data:
                     print(f"[Frame] Captured and sending to {http_base}/api/sim/frame")
                     # Send in background thread to avoid blocking
