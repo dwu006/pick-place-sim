@@ -9,7 +9,7 @@ from order_store import (
     list_orders as store_list_orders,
     set_wrist_image,
 )
-from routers.websocket import broadcast_to_sim
+from routers.websocket import broadcast_to_sim, broadcast_frame
 from schemas import OrderCreateRequest, OrderResponse, StoreItem
 from spawn_sim import spawn_sim_client
 
@@ -81,3 +81,15 @@ async def upload_wrist_image(order_id: str, request: Request):
 async def list_store_items():
     """List room objects that can be picked up (cleanup task)."""
     return ROOM_OBJECTS
+
+
+@router.post("/sim/frame", status_code=200)
+async def receive_sim_frame(request: Request):
+    """Receive a simulation frame (base64 image) from the sim client and broadcast to viewers."""
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Empty body")
+    # Body should be base64-encoded image string
+    frame_data = body.decode('utf-8')
+    await broadcast_frame(frame_data)
+    return {"ok": True}

@@ -530,6 +530,43 @@ async def _send_wrist_image_to_backend(http_base: str, order_id: str, image_byte
         return False
 
 
+def _capture_viewer_frame(model, data, camera="default"):
+    """Render one frame from the specified camera and return base64-encoded PNG string."""
+    if model is None or data is None:
+        return None
+    try:
+        import base64
+        width, height = 640, 480
+        renderer = mujoco.Renderer(model, height=height, width=width)
+        renderer.update_scene(data, camera=camera)
+        pixels = renderer.render()
+        if pixels is None or pixels.size == 0:
+            return None
+        if Image is None:
+            return None
+        img = Image.fromarray(pixels)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return base64.b64encode(buf.getvalue()).decode('utf-8')
+    except Exception as e:
+        return None
+
+
+async def _send_frame_to_backend(http_base: str, frame_data: str) -> bool:
+    """POST simulation frame (base64 image) to backend for broadcasting to viewers."""
+    if not frame_data or not http_base:
+        return False
+    if httpx is None:
+        return False
+    url = f"{http_base.rstrip('/')}/api/sim/frame"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.post(url, content=frame_data.encode('utf-8'))
+            return r.status_code == 200
+    except Exception:
+        return False
+
+
 async def wait_for_orders_loop(url: str, controller: RobotController):
     """Connect to /ws/sim and run each order when the backend sends new_order."""
     sim_ws_url = f"{url}/ws/sim"
@@ -561,12 +598,16 @@ async def wait_for_orders_loop(url: str, controller: RobotController):
         await asyncio.sleep(2)
 
 
-def run_simulation(controller: RobotController, model, data):
+def run_simulation(controller: RobotController, model, data, http_base: str = None, enable_web_streaming: bool = False):
     """Run the MuJoCo simulation with real-time robot control."""
     print("\nLaunching MuJoCo viewer...")
     print("The robot will move when steps are received from the backend.\n")
+    if enable_web_streaming:
+        print("Web streaming enabled - frames will be sent to frontend viewers.\n")
 
     current_animation = None
+    frame_counter = 0
+    last_frame_time = time.time()
 
     # Use a simple loop with mj_step and render
     import platform
@@ -716,6 +757,18 @@ def run_simulation(controller: RobotController, model, data):
                 mujoco.mj_step(model, data)
                 viewer.sync()
 
+                # Send frames to web viewers (throttled to ~10 FPS)
+                if enable_web_streaming and http_base:
+                    frame_counter += 1
+                    if frame_counter % 5 == 0:  # Send every 5th frame
+                        current_time = time.time()
+                        if current_time - last_frame_time >= 0.1:  # Max 10 FPS
+                            frame_data = _capture_viewer_frame(model, data, camera="default")
+                            if frame_data:
+                                # Send in background thread to avoid blocking
+                                threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
+                            last_frame_time = current_time
+
                 dt = model.opt.timestep
                 elapsed = time.time() - step_start
                 if elapsed < dt:
@@ -750,7 +803,11 @@ def main():
     parser.add_argument("--backend-url", default="ws://localhost:8000", help="Backend WebSocket URL")
     parser.add_argument("--demo", action="store_true", help="Run demo mode without backend connection")
     parser.add_argument("--wait", action="store_true", help="Connect to /ws/sim; run each order when user submits on frontend")
+    parser.add_argument("--enable-web-viewer", action="store_true", help="Stream simulation frames to web frontend")
     args = parser.parse_args()
+
+    # Convert WebSocket URL to HTTP base URL for frame streaming
+    http_base = args.backend_url.replace("ws://", "http://").replace("wss://", "https://")
 
     print("Loading MuJoCo scene...")
     model, data = load_scene_with_table()
@@ -783,7 +840,7 @@ def main():
         if picked > 0:
             controller.add_step("done", "", "Done!")
 
-        run_simulation(controller, model, data)
+        run_simulation(controller, model, data, http_base, args.enable_web_viewer)
     elif args.wait:
         # Wait mode: scene is already loaded; listen for orders from frontend
         print("\n=== WAIT MODE ===")
@@ -798,7 +855,7 @@ def main():
         thread = threading.Thread(target=ws_thread, daemon=True)
         thread.start()
 
-        run_simulation(controller, model, data)
+        run_simulation(controller, model, data, http_base, args.enable_web_viewer)
     else:
         # Live mode: single order
         print(f"\n=== LIVE MODE ===")
@@ -815,7 +872,7 @@ def main():
         thread = threading.Thread(target=ws_thread, daemon=True)
         thread.start()
 
-        run_simulation(controller, model, data)
+        run_simulation(controller, model, data, http_base, args.enable_web_viewer)
 
 
 if __name__ == "__main__":

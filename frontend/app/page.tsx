@@ -6,6 +6,7 @@ import { OrderInput } from "@/components/order-input";
 import { OrderList } from "@/components/order-list";
 import { PickListView } from "@/components/pick-list-view";
 import { RobotStepLog } from "@/components/robot-step-log";
+import { SimViewer } from "@/components/sim-viewer";
 import { useCreateOrder, useOrder, useOrders } from "@/lib/hooks/use-orders";
 import { useOrderWebSocket } from "@/lib/hooks/use-websocket";
 import { startSim } from "@/lib/api";
@@ -115,6 +116,11 @@ export default function CleanupRoomPage() {
           <div className="ml-auto text-sm text-slate-500">
             Press <kbd className="px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-mono text-xs">R</kbd> in sim to reset scene
           </div>
+        </div>
+
+        {/* Simulation Viewer */}
+        <div className="mb-6">
+          <SimViewer />
         </div>
 
         <div className="grid grid-cols-12 gap-6">
