@@ -600,6 +600,18 @@ async def wait_for_orders_loop(url: str, controller: RobotController):
 
 def run_simulation(controller: RobotController, model, data, http_base: str = None, enable_web_streaming: bool = False):
     """Run the MuJoCo simulation with real-time robot control."""
+    # Check if we have a display - if not, use headless mode
+    import platform
+    has_display = os.environ.get('DISPLAY') is not None or platform.system() == "Windows"
+
+    if not has_display or (enable_web_streaming and platform.system() == "Linux"):
+        # No display available or Linux with web streaming - use headless mode
+        print("\nNo display detected - running in headless mode with offscreen rendering")
+        if enable_web_streaming:
+            print("Web streaming enabled - frames will be sent to frontend viewers.\n")
+        _run_headless(controller, model, data, http_base, enable_web_streaming)
+        return
+
     print("\nLaunching MuJoCo viewer...")
     print("The robot will move when steps are received from the backend.\n")
     if enable_web_streaming:
@@ -608,9 +620,6 @@ def run_simulation(controller: RobotController, model, data, http_base: str = No
     current_animation = None
     frame_counter = 0
     last_frame_time = time.time()
-
-    # Use a simple loop with mj_step and render
-    import platform
 
     if platform.system() == "Darwin":
         # macOS: use glfw directly for rendering
