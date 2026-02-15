@@ -153,9 +153,8 @@ class RobotController:
         # Find object body positions and store initial positions for reset
         self._find_object_positions()
 
-        # Initialize arm to home position
-        self._set_arm_qpos(HOME_QPOS)
-        mujoco.mj_forward(model, data)
+        # Don't move arm on init - keep scene's initial position
+        # (arm will move to targets when tasks are executed)
 
     def _find_object_positions(self):
         """Find positions of all objects in the scene using defaults."""

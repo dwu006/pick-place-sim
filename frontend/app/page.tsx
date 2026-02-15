@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Bot, Sparkles, Trash2, Play } from "lucide-react";
+import { Bot, Sparkles, Trash2, Play, X } from "lucide-react";
 import { OrderInput } from "@/components/order-input";
 import { OrderList } from "@/components/order-list";
 import { PickListView } from "@/components/pick-list-view";
@@ -151,7 +151,7 @@ export default function CleanupRoomPage() {
                     onClick={() => setRobotSteps([])}
                     className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1"
                   >
-                    <RotateCcw className="w-3 h-3" />
+                    <X className="w-3 h-3" />
                     Clear
                   </button>
                 )}
