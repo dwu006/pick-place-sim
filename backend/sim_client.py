@@ -603,7 +603,7 @@ async def wait_for_orders_loop(url: str, controller: RobotController):
         await asyncio.sleep(2)
 
 
-def run_simulation(controller: RobotController, model, data, http_base: str = None, enable_web_streaming: bool = False):
+def run_simulation(controller: RobotController, model, data, http_base: str = None, enable_web_streaming: bool = True):
     """Run the MuJoCo simulation with real-time robot control."""
     # Check if we have a display - if not, use headless mode
     import platform
@@ -797,7 +797,7 @@ def run_simulation(controller: RobotController, model, data, http_base: str = No
     print("\nViewer closed.")
 
 
-def _run_headless(controller, model, data, http_base: str = None, enable_web_streaming: bool = False):
+def _run_headless(controller, model, data, http_base: str = None, enable_web_streaming: bool = True):
     """Run simulation without viewer (headless mode with optional web streaming)."""
     print("Running in headless mode...")
     print(f"[DEBUG] http_base={http_base}, enable_web_streaming={enable_web_streaming}")
@@ -854,7 +854,8 @@ def main():
     parser.add_argument("--backend-url", default="ws://localhost:8000", help="Backend WebSocket URL")
     parser.add_argument("--demo", action="store_true", help="Run demo mode without backend connection")
     parser.add_argument("--wait", action="store_true", help="Connect to /ws/sim; run each order when user submits on frontend")
-    parser.add_argument("--enable-web-viewer", action="store_true", help="Stream simulation frames to web frontend")
+    parser.add_argument("--enable-web-viewer", action="store_true", default=True, help="Stream simulation frames to web frontend (default: True)")
+    parser.add_argument("--no-web-viewer", action="store_false", dest="enable_web_viewer", help="Disable web streaming")
     args = parser.parse_args()
 
     # Convert WebSocket URL to HTTP base URL for frame streaming
