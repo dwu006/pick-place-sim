@@ -834,20 +834,14 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
             if frame_counter == 1:
                 print(f"[DEBUG] Frame streaming active! Will send every 5th frame.")
             if frame_counter % 5 == 0:  # Send every 5th frame
-                current_time = time.time()
-                time_since_last = current_time - last_frame_time
-                if frame_counter == 5:
-                    print(f"[DEBUG] Frame 5: time_since_last={time_since_last:.3f}s, threshold=0.1s")
-                if current_time - last_frame_time >= 0.1:  # Max 10 FPS
-                    frame_data = _capture_viewer_frame(model, data, camera="default")
-                    if frame_data:
-                        print(f"[Frame] Captured and sending to {http_base}/api/sim/frame")
-                        # Send in background thread to avoid blocking
-                        threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
-                    else:
-                        if frame_counter == 5:  # Only print once
-                            print("[Frame] WARNING: Frame capture failed - EGL rendering may not be working")
-                    last_frame_time = current_time
+                frame_data = _capture_viewer_frame(model, data, camera="default")
+                if frame_data:
+                    print(f"[Frame] Captured and sending to {http_base}/api/sim/frame")
+                    # Send in background thread to avoid blocking
+                    threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
+                else:
+                    if frame_counter == 5:  # Only print once
+                        print("[Frame] WARNING: Frame capture failed - EGL rendering may not be working")
 
         dt = model.opt.timestep
         elapsed = time.time() - step_start
