@@ -800,6 +800,7 @@ def run_simulation(controller: RobotController, model, data, http_base: str = No
 def _run_headless(controller, model, data, http_base: str = None, enable_web_streaming: bool = False):
     """Run simulation without viewer (headless mode with optional web streaming)."""
     print("Running in headless mode...")
+    print(f"[DEBUG] http_base={http_base}, enable_web_streaming={enable_web_streaming}")
     if enable_web_streaming:
         print("Web streaming enabled - frames will be sent to frontend viewers.\n")
 
