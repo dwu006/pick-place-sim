@@ -812,6 +812,12 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
     frame_counter = 0
     last_frame_time = time.time()
 
+    # Frame recording for replay
+    recorded_frames = []
+    is_recording = False
+    is_replaying = False
+    replay_index = 0
+
     # Run continuously (for web viewer), not just until steps are done
     running = True
     loop_count = 0
@@ -821,6 +827,14 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
         if loop_count == 1:
             print(f"[DEBUG] Headless loop started, enable_web_streaming={enable_web_streaming}, http_base={http_base}")
 
+        # Handle recording/replay state
+        if controller.has_pending_steps() and not is_recording:
+            # New task starting - clear old recording and start fresh
+            is_recording = True
+            is_replaying = False
+            recorded_frames = []
+            print("[Replay] Started recording frames for new task")
+
         if current_animation is not None:
             try:
                 next(current_animation)
@@ -828,23 +842,44 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
                 current_animation = None
         elif controller.has_pending_steps():
             current_animation = controller.process_step()
+        elif is_recording and not controller.has_pending_steps() and current_animation is None:
+            # Task just finished - start replay
+            is_recording = False
+            if len(recorded_frames) > 0:
+                is_replaying = True
+                replay_index = 0
+                print(f"[Replay] Task complete! Replaying {len(recorded_frames)} frames...")
 
         controller.update_held_object()
         mujoco.mj_step(model, data)
 
-        # Send frames to web viewers (every 3rd frame)
+        # Send frames to web viewers (every 3rd frame when live, replay when done)
         if enable_web_streaming and http_base:
             frame_counter += 1
             if frame_counter == 1:
-                print(f"[DEBUG] Frame streaming active! Sending every 3rd frame.")
-            if frame_counter % 3 == 0:  # Every 3rd frame
-                frame_data = _capture_viewer_frame(model, data, camera=-1)
+                print(f"[DEBUG] Frame streaming active! Sending every 3rd frame (with replay after completion).")
+
+            if is_replaying:
+                # Send recorded frame from replay buffer
+                if replay_index < len(recorded_frames):
+                    frame_data = recorded_frames[replay_index]
+                    threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
+                    replay_index += 1
+                    time.sleep(0.033)  # ~30 FPS replay
+                else:
+                    # Loop replay
+                    replay_index = 0
+            elif frame_counter % 3 == 0:  # Every 3rd frame during live execution
+                frame_data = _capture_viewer_frame(model, data, camera="hand_camera")
                 if frame_data:
                     if frame_counter <= 15:  # Only log first few
                         print(f"[Frame] Captured and sending to {http_base}/api/sim/frame")
-                    # Send in background thread to avoid blocking
+                    # Send frame
                     threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
-                elif frame_counter == 5:
+                    # Record frame for replay
+                    if is_recording:
+                        recorded_frames.append(frame_data)
+                elif frame_counter == 3:
                     print("[Frame] WARNING: Frame capture failed - EGL rendering may not be working")
 
         dt = model.opt.timestep
