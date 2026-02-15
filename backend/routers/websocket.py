@@ -54,18 +54,6 @@ async def broadcast_frame(frame_data: str):
         viewer_subscribers.discard(ws)
 
 
-async def broadcast_video_ready(video_url: str):
-    """Broadcast notification that a replay video is ready."""
-    dead = set()
-    for ws in viewer_subscribers:
-        try:
-            await ws.send_text(json.dumps({"type": "video_ready", "video_url": video_url}))
-        except Exception:
-            dead.add(ws)
-    for ws in dead:
-        viewer_subscribers.discard(ws)
-
-
 async def broadcast_reset():
     """Send reset command to all connected sim clients."""
     logger.info(f"Broadcasting reset command to {len(sim_subscribers)} sim clients")

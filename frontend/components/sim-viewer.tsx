@@ -6,7 +6,6 @@ export function SimViewer() {
   const [connected, setConnected] = useState(false);
   const [wristFrame, setWristFrame] = useState<string | null>(null);
   const [freeFrame, setFreeFrame] = useState<string | null>(null);
-  const [replayVideoUrl, setReplayVideoUrl] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -28,8 +27,6 @@ export function SimViewer() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "frame" && data.data) {
-          // Clear video when new live frames arrive
-          setReplayVideoUrl(null);
           // Check if it's dual camera data
           try {
             const frameData = JSON.parse(data.data);
@@ -46,14 +43,6 @@ export function SimViewer() {
             setWristFrame(data.data);
             setFreeFrame(null);
           }
-        } else if (data.type === "video_ready" && data.video_url) {
-          console.log("Replay video ready:", data.video_url);
-          // Construct full URL
-          const baseUrl = process.env.NEXT_PUBLIC_API_BASE || `http://${window.location.hostname}:8000`;
-          setReplayVideoUrl(`${baseUrl}${data.video_url}`);
-          // Clear live frames
-          setWristFrame(null);
-          setFreeFrame(null);
         }
       } catch (err) {
         console.error("Failed to parse sim viewer message:", err);
@@ -85,18 +74,7 @@ export function SimViewer() {
         </div>
       </div>
       <div className="relative h-96 bg-black flex items-center justify-center">
-        {replayVideoUrl ? (
-          <div className="w-full h-full flex flex-col items-center justify-center p-4">
-            <div className="text-xs text-white/60 mb-2">Task Replay</div>
-            <video
-              src={replayVideoUrl}
-              controls
-              autoPlay
-              loop
-              className="max-w-full max-h-full rounded border border-white/10"
-            />
-          </div>
-        ) : wristFrame || freeFrame ? (
+        {wristFrame || freeFrame ? (
           <div className="flex gap-2 w-full h-full p-2">
             {/* Wrist Camera - Left */}
             <div className="flex-1 flex flex-col items-center justify-center border border-white/10 rounded">
