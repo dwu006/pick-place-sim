@@ -56,6 +56,18 @@ export default function CleanupRoomPage() {
     setRobotSteps([]);
   };
 
+  const handleResetScene = async () => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE || `http://${window.location.hostname}:8000`;
+      const response = await fetch(`${baseUrl}/api/sim/reset`, { method: "POST" });
+      if (response.ok) {
+        console.log("Scene reset command sent");
+      }
+    } catch (error) {
+      console.error("Failed to reset scene:", error);
+    }
+  };
+
   const isRunning = activeOrder &&
     (activeOrder.status === "planning" || activeOrder.status === "picking");
 
@@ -113,9 +125,13 @@ export default function CleanupRoomPage() {
               <span className="text-sm font-medium text-blue-300">Robot Working...</span>
             </div>
           )}
-          <div className="ml-auto text-sm text-slate-500">
-            Press <kbd className="px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-mono text-xs">R</kbd> in sim to reset scene
-          </div>
+          <button
+            onClick={handleResetScene}
+            className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 hover:border-slate-500 transition-all text-sm font-medium text-slate-300 hover:text-white"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Reset Scene
+          </button>
         </div>
 
         {/* Simulation Viewer */}

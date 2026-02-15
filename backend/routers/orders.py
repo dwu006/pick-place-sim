@@ -132,3 +132,11 @@ async def video_ready_notification(request: Request):
     except Exception as e:
         print(f"Error in video_ready_notification: {e}")
         return {"ok": False, "error": str(e)}
+
+
+@router.post("/sim/reset", status_code=200)
+async def reset_simulation():
+    """Send reset command to all connected sim clients."""
+    from routers.websocket import broadcast_reset
+    await broadcast_reset()
+    return {"ok": True, "message": "Reset command sent to simulation"}
