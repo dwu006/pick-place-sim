@@ -728,61 +728,76 @@ def run_simulation(controller: RobotController, model, data, http_base: str = No
         except Exception as e:
             print(f"GLFW error: {e}")
             print("\nFallback: Running without viewer (headless mode)")
-            _run_headless(controller, model, data)
+            _run_headless(controller, model, data, http_base, enable_web_streaming)
     else:
         # Non-macOS: use launch_passive
-        with mujoco.viewer.launch_passive(model, data) as viewer:
-            hand_cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "hand_camera")
-            if hand_cam_id >= 0:
-                viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
-                viewer.cam.fixedcamid = hand_cam_id
-            else:
-                viewer.cam.lookat[:] = [0.0, 0.0, 0.35]
-                viewer.cam.distance = 2.5
-                viewer.cam.azimuth = 135
-                viewer.cam.elevation = -25
+        try:
+            viewer = mujoco.viewer.launch_passive(model, data)
+            with viewer:
+                hand_cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "hand_camera")
+                if hand_cam_id >= 0:
+                    viewer.cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
+                    viewer.cam.fixedcamid = hand_cam_id
+                else:
+                    viewer.cam.lookat[:] = [0.0, 0.0, 0.35]
+                    viewer.cam.distance = 2.5
+                    viewer.cam.azimuth = 135
+                    viewer.cam.elevation = -25
 
-            while viewer.is_running():
-                step_start = time.time()
+                while viewer.is_running():
+                    step_start = time.time()
 
-                if current_animation is not None:
-                    try:
-                        next(current_animation)
-                    except StopIteration:
-                        current_animation = None
-                elif controller.has_pending_steps():
-                    current_animation = controller.process_step()
+                    if current_animation is not None:
+                        try:
+                            next(current_animation)
+                        except StopIteration:
+                            current_animation = None
+                    elif controller.has_pending_steps():
+                        current_animation = controller.process_step()
 
-                controller.update_held_object()
-                mujoco.mj_step(model, data)
-                viewer.sync()
+                    controller.update_held_object()
+                    mujoco.mj_step(model, data)
+                    viewer.sync()
 
-                # Send frames to web viewers (throttled to ~10 FPS)
-                if enable_web_streaming and http_base:
-                    frame_counter += 1
-                    if frame_counter % 5 == 0:  # Send every 5th frame
-                        current_time = time.time()
-                        if current_time - last_frame_time >= 0.1:  # Max 10 FPS
-                            frame_data = _capture_viewer_frame(model, data, camera="default")
-                            if frame_data:
-                                # Send in background thread to avoid blocking
-                                threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
-                            last_frame_time = current_time
+                    # Send frames to web viewers (throttled to ~10 FPS)
+                    if enable_web_streaming and http_base:
+                        frame_counter += 1
+                        if frame_counter % 5 == 0:  # Send every 5th frame
+                            current_time = time.time()
+                            if current_time - last_frame_time >= 0.1:  # Max 10 FPS
+                                frame_data = _capture_viewer_frame(model, data, camera="default")
+                                if frame_data:
+                                    # Send in background thread to avoid blocking
+                                    threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
+                                last_frame_time = current_time
 
-                dt = model.opt.timestep
-                elapsed = time.time() - step_start
-                if elapsed < dt:
-                    time.sleep(dt - elapsed)
+                    dt = model.opt.timestep
+                    elapsed = time.time() - step_start
+                    if elapsed < dt:
+                        time.sleep(dt - elapsed)
+        except Exception as e:
+            print(f"Viewer error: {e}")
+            print("\nFallback: Running without viewer (headless mode)")
+            _run_headless(controller, model, data, http_base, enable_web_streaming)
 
     print("\nViewer closed.")
 
 
-def _run_headless(controller, model, data):
-    """Run simulation without viewer (for testing)."""
+def _run_headless(controller, model, data, http_base: str = None, enable_web_streaming: bool = False):
+    """Run simulation without viewer (headless mode with optional web streaming)."""
     print("Running in headless mode...")
-    current_animation = None
+    if enable_web_streaming:
+        print("Web streaming enabled - frames will be sent to frontend viewers.\n")
 
-    while controller.has_pending_steps() or current_animation is not None:
+    current_animation = None
+    frame_counter = 0
+    last_frame_time = time.time()
+
+    # Run continuously (for web viewer), not just until steps are done
+    running = True
+    while running:
+        step_start = time.time()
+
         if current_animation is not None:
             try:
                 next(current_animation)
@@ -791,8 +806,25 @@ def _run_headless(controller, model, data):
         elif controller.has_pending_steps():
             current_animation = controller.process_step()
 
+        controller.update_held_object()
         mujoco.mj_step(model, data)
-        time.sleep(model.opt.timestep)
+
+        # Send frames to web viewers (throttled to ~10 FPS)
+        if enable_web_streaming and http_base:
+            frame_counter += 1
+            if frame_counter % 5 == 0:  # Send every 5th frame
+                current_time = time.time()
+                if current_time - last_frame_time >= 0.1:  # Max 10 FPS
+                    frame_data = _capture_viewer_frame(model, data, camera="default")
+                    if frame_data:
+                        # Send in background thread to avoid blocking
+                        threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
+                    last_frame_time = current_time
+
+        dt = model.opt.timestep
+        elapsed = time.time() - step_start
+        if elapsed < dt:
+            time.sleep(dt - elapsed)
 
     print("Headless simulation complete.")
 
