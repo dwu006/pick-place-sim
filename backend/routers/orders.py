@@ -11,7 +11,7 @@ from order_store import (
     list_orders as store_list_orders,
     set_wrist_image,
 )
-from routers.websocket import broadcast_to_sim, broadcast_frame, broadcast_reset
+from routers.websocket import broadcast_to_sim, broadcast_frame
 from schemas import OrderCreateRequest, OrderResponse, StoreItem
 from spawn_sim import spawn_sim_client
 
@@ -95,11 +95,3 @@ async def receive_sim_frame(request: Request):
     frame_data = body.decode('utf-8')
     await broadcast_frame(frame_data)
     return {"ok": True}
-
-
-@router.post("/sim/reset", status_code=200)
-async def reset_simulation():
-    """Send reset command to all connected sim clients."""
-    from routers.websocket import broadcast_reset
-    await broadcast_reset()
-    return {"ok": True, "message": "Reset command sent to simulation"}

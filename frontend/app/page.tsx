@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Bot, Sparkles, Trash2, Play, RotateCcw } from "lucide-react";
+import { Bot, Sparkles, Trash2, Play } from "lucide-react";
 import { OrderInput } from "@/components/order-input";
 import { OrderList } from "@/components/order-list";
 import { PickListView } from "@/components/pick-list-view";
@@ -54,18 +54,6 @@ export default function CleanupRoomPage() {
   const handleSelectOrder = (id: string) => {
     setActiveOrderId(id);
     setRobotSteps([]);
-  };
-
-  const handleResetScene = async () => {
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE || `http://${window.location.hostname}:8000`;
-      const response = await fetch(`${baseUrl}/api/sim/reset`, { method: "POST" });
-      if (response.ok) {
-        console.log("Scene reset command sent");
-      }
-    } catch (error) {
-      console.error("Failed to reset scene:", error);
-    }
   };
 
   const isRunning = activeOrder &&
@@ -125,13 +113,6 @@ export default function CleanupRoomPage() {
               <span className="text-sm font-medium text-blue-300">Robot Working...</span>
             </div>
           )}
-          <button
-            onClick={handleResetScene}
-            className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 hover:border-slate-500 transition-all text-sm font-medium text-slate-300 hover:text-white"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Reset Scene
-          </button>
         </div>
 
         {/* Simulation Viewer */}

@@ -54,20 +54,6 @@ async def broadcast_frame(frame_data: str):
         viewer_subscribers.discard(ws)
 
 
-async def broadcast_reset():
-    """Send reset command to all connected sim clients."""
-    logger.info(f"Broadcasting reset command to {len(sim_subscribers)} sim clients")
-    dead = set()
-    for ws in sim_subscribers:
-        try:
-            await ws.send_text(json.dumps({"type": "reset_scene"}))
-        except Exception as e:
-            logger.error(f"Failed to send reset to sim client: {e}")
-            dead.add(ws)
-    for ws in dead:
-        sim_subscribers.discard(ws)
-
-
 # IMPORTANT: /ws/sim MUST be defined BEFORE /ws/{order_id} to avoid route conflict
 @router.websocket("/ws/sim")
 async def sim_websocket(websocket: WebSocket):
