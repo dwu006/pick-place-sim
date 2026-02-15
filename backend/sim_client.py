@@ -534,15 +534,27 @@ async def _send_wrist_image_to_backend(http_base: str, order_id: str, image_byte
         return False
 
 
-def _capture_viewer_frame(model, data, camera="default"):
-    """Render one frame from the specified camera and return base64-encoded PNG string."""
+def _capture_viewer_frame(model, data, camera=-1):
+    """Render one frame from the free camera with custom settings."""
     if model is None or data is None:
         return None
     try:
         import base64
         width, height = 480, 360  # Smaller for faster streaming
+
+        # Create renderer and camera
         renderer = mujoco.Renderer(model, height=height, width=width)
-        renderer.update_scene(data, camera=camera)
+
+        # Set up camera view (user-configured)
+        scene_option = mujoco.MjvOption()
+        cam = mujoco.MjvCamera()
+        cam.lookat[:] = [0.00, 0.00, 0.35]
+        cam.distance = 2.94
+        cam.azimuth = 135.0
+        cam.elevation = -25.0
+
+        # Render with custom camera
+        renderer.update_scene(data, camera=camera, scene_option=scene_option)
         pixels = renderer.render()
         if pixels is None or pixels.size == 0:
             return None
