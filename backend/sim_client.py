@@ -810,8 +810,12 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
 
     # Run continuously (for web viewer), not just until steps are done
     running = True
+    loop_count = 0
     while running:
         step_start = time.time()
+        loop_count += 1
+        if loop_count == 1:
+            print(f"[DEBUG] Headless loop started, enable_web_streaming={enable_web_streaming}, http_base={http_base}")
 
         if current_animation is not None:
             try:
@@ -827,6 +831,8 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
         # Send frames to web viewers (throttled to ~10 FPS)
         if enable_web_streaming and http_base:
             frame_counter += 1
+            if frame_counter == 1:
+                print(f"[DEBUG] Frame streaming active! Will send every 5th frame.")
             if frame_counter % 5 == 0:  # Send every 5th frame
                 current_time = time.time()
                 if current_time - last_frame_time >= 0.1:  # Max 10 FPS
