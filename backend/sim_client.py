@@ -34,6 +34,10 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 
+# Set up EGL rendering for headless servers (must be set before importing mujoco)
+if 'DISPLAY' not in os.environ:
+    os.environ['MUJOCO_GL'] = 'egl'
+
 try:
     import mujoco
     import mujoco.viewer
@@ -549,6 +553,7 @@ def _capture_viewer_frame(model, data, camera="default"):
         img.save(buf, format="PNG")
         return base64.b64encode(buf.getvalue()).decode('utf-8')
     except Exception as e:
+        # Silently skip frame if rendering fails (e.g., no EGL/OSMesa available)
         return None
 
 
