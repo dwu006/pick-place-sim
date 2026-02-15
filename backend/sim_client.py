@@ -830,20 +830,19 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
         controller.update_held_object()
         mujoco.mj_step(model, data)
 
-        # Send frames to web viewers (throttled to ~10 FPS)
+        # Send frames to web viewers (every frame for maximum speed)
         if enable_web_streaming and http_base:
             frame_counter += 1
             if frame_counter == 1:
-                print(f"[DEBUG] Frame streaming active! Will send every 5th frame.")
-            if frame_counter % 2 == 0:  # Send every 2nd frame (faster)
-                frame_data = _capture_viewer_frame(model, data, camera=-1)  # -1 = free camera
-                if frame_data:
+                print(f"[DEBUG] Frame streaming active! Sending every frame.")
+            frame_data = _capture_viewer_frame(model, data, camera=-1)  # -1 = free camera
+            if frame_data:
+                if frame_counter <= 3:  # Only log first few frames
                     print(f"[Frame] Captured and sending to {http_base}/api/sim/frame")
-                    # Send in background thread to avoid blocking
-                    threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
-                else:
-                    if frame_counter == 5:  # Only print once
-                        print("[Frame] WARNING: Frame capture failed - EGL rendering may not be working")
+                # Send in background thread to avoid blocking
+                threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
+            elif frame_counter == 1:
+                print("[Frame] WARNING: Frame capture failed - EGL rendering may not be working")
 
         dt = model.opt.timestep
         elapsed = time.time() - step_start
