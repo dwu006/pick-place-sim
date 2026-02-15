@@ -553,7 +553,9 @@ def _capture_viewer_frame(model, data, camera="default"):
         img.save(buf, format="PNG")
         return base64.b64encode(buf.getvalue()).decode('utf-8')
     except Exception as e:
-        # Silently skip frame if rendering fails (e.g., no EGL/OSMesa available)
+        print(f"[Frame ERROR] {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
