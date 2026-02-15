@@ -29,7 +29,7 @@ export function RobotStepLog({ steps, isActive }: RobotStepLogProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
   }, [steps.length]);
 
   if (steps.length === 0 && !isActive) {

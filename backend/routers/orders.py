@@ -1,6 +1,8 @@
 from typing import Any, List
+import os
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from config import settings
 from order_store import (
@@ -93,3 +95,40 @@ async def receive_sim_frame(request: Request):
     frame_data = body.decode('utf-8')
     await broadcast_frame(frame_data)
     return {"ok": True}
+
+
+@router.get("/sim/videos/{filename}")
+async def get_replay_video(filename: str):
+    """Serve replay video files."""
+    # Security: only allow alphanumeric, dash, underscore, and .mp4 extension
+    if not filename.endswith('.mp4') or not all(c.isalnum() or c in '_.mp4-' for c in filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    video_path = os.path.join("videos", filename)
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    return FileResponse(video_path, media_type="video/mp4")
+
+
+@router.post("/sim/video_ready", status_code=200)
+async def video_ready_notification(request: Request):
+    """Receive notification from sim client that replay video is ready."""
+    try:
+        data = await request.json()
+        order_id = data.get("order_id")
+        video_path = data.get("video_path")
+
+        if video_path:
+            # Extract filename from path
+            filename = os.path.basename(video_path)
+            video_url = f"/api/sim/videos/{filename}"
+
+            # Broadcast to viewer WebSocket
+            from routers.websocket import broadcast_video_ready
+            await broadcast_video_ready(video_url)
+
+        return {"ok": True}
+    except Exception as e:
+        print(f"Error in video_ready_notification: {e}")
+        return {"ok": False, "error": str(e)}

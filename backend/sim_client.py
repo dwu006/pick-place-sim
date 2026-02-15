@@ -25,9 +25,12 @@ from typing import Optional
 try:
     import httpx
     from PIL import Image
-except ImportError:
+    import cv2
+except ImportError as e:
     httpx = None
     Image = None
+    cv2 = None
+    print(f"Optional dependency missing: {e}")
 
 # Ensure backend dir is on path
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -576,6 +579,120 @@ async def _send_frame_to_backend(http_base: str, frame_data: str) -> bool:
         return False
 
 
+def _generate_replay_video(recorded_frames: list, output_path: str = None) -> Optional[str]:
+    """Generate MP4 video from recorded dual-camera frames.
+
+    Args:
+        recorded_frames: List of JSON strings containing {wrist: base64, free: base64}
+        output_path: Where to save the video (default: videos/replay_{timestamp}.mp4)
+
+    Returns:
+        Path to generated video file, or None if failed
+    """
+    if not recorded_frames or cv2 is None or Image is None:
+        print("[Video] Cannot generate video - missing frames or opencv")
+        return None
+
+    try:
+        import base64
+        from datetime import datetime
+
+        # Default output path
+        if output_path is None:
+            os.makedirs("videos", exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = f"videos/replay_{timestamp}.mp4"
+
+        print(f"[Video] Generating replay video with {len(recorded_frames)} frames...")
+
+        # Decode first frame to get dimensions
+        first_frame_json = json.loads(recorded_frames[0])
+        wrist_b64 = first_frame_json.get("wrist", "")
+        free_b64 = first_frame_json.get("free", "")
+
+        wrist_img = Image.open(io.BytesIO(base64.b64decode(wrist_b64)))
+        free_img = Image.open(io.BytesIO(base64.b64decode(free_b64)))
+
+        # Convert PIL to numpy for opencv
+        wrist_np = np.array(wrist_img)
+        free_np = np.array(free_img)
+
+        # Side-by-side dimensions (wrist left, free right)
+        h, w = wrist_np.shape[:2]
+        combined_width = w * 2
+        combined_height = h
+
+        # Initialize video writer (30 FPS, H264 codec)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # or 'avc1' for H.264
+        out = cv2.VideoWriter(output_path, fourcc, 30.0, (combined_width, combined_height))
+
+        if not out.isOpened():
+            print("[Video] ERROR: Could not open video writer")
+            return None
+
+        # Process each frame
+        for i, frame_data in enumerate(recorded_frames):
+            try:
+                frame_json = json.loads(frame_data)
+                wrist_b64 = frame_json.get("wrist", "")
+                free_b64 = frame_json.get("free", "")
+
+                # Decode images
+                wrist_img = Image.open(io.BytesIO(base64.b64decode(wrist_b64)))
+                free_img = Image.open(io.BytesIO(base64.b64decode(free_b64)))
+
+                # Convert to numpy arrays (RGB)
+                wrist_np = np.array(wrist_img)
+                free_np = np.array(free_img)
+
+                # Combine side-by-side
+                combined = np.hstack([wrist_np, free_np])
+
+                # Convert RGB to BGR for OpenCV
+                combined_bgr = cv2.cvtColor(combined, cv2.COLOR_RGB2BGR)
+
+                # Write frame
+                out.write(combined_bgr)
+
+            except Exception as e:
+                print(f"[Video] Warning: Failed to process frame {i}: {e}")
+                continue
+
+        # Release video writer
+        out.release()
+
+        print(f"[Video] Successfully generated: {output_path}")
+        return output_path
+
+    except Exception as e:
+        print(f"[Video] ERROR generating video: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+async def _send_video_ready_message(http_base: str, order_id: str, video_path: str) -> bool:
+    """Send video_ready message to backend WebSocket."""
+    if not http_base or not video_path:
+        return False
+    if httpx is None:
+        return False
+
+    # For now, just send a simple notification
+    # TODO: Implement video upload or serving endpoint
+    url = f"{http_base.rstrip('/')}/api/sim/video_ready"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.post(url, json={
+                "order_id": order_id,
+                "video_path": video_path
+            })
+            return r.status_code == 200
+    except Exception as e:
+        print(f"[Video] Failed to send video ready message: {e}")
+        return False
+
+
 async def wait_for_orders_loop(url: str, controller: RobotController):
     """Connect to /ws/sim and run each order when the backend sends new_order."""
     sim_ws_url = f"{url}/ws/sim"
@@ -843,43 +960,51 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
         elif controller.has_pending_steps():
             current_animation = controller.process_step()
         elif is_recording and not controller.has_pending_steps() and current_animation is None:
-            # Task just finished - start replay
+            # Task just finished - generate video
             is_recording = False
             if len(recorded_frames) > 0:
-                is_replaying = True
-                replay_index = 0
-                print(f"[Replay] Task complete! Replaying {len(recorded_frames)} frames...")
+                print(f"[Replay] Task complete! Generating video from {len(recorded_frames)} frames...")
+                video_path = _generate_replay_video(recorded_frames)
+                if video_path and http_base:
+                    is_replaying = True  # Mark as done
+                    print(f"[Replay] Video generated: {video_path}")
+                    # Notify backend that video is ready
+                    http_url = http_base.replace("ws://", "http://").replace("wss://", "https://")
+                    threading.Thread(
+                        target=lambda: asyncio.run(_send_video_ready_message(http_url, "", video_path)),
+                        daemon=True
+                    ).start()
+                recorded_frames = []  # Clear to save memory
 
         controller.update_held_object()
         mujoco.mj_step(model, data)
 
-        # Send frames to web viewers (every 3rd frame when live, replay when done)
+        # Send frames to web viewers (every 5th frame when live, replay when done)
         if enable_web_streaming and http_base:
             frame_counter += 1
             if frame_counter == 1:
-                print(f"[DEBUG] Frame streaming active! Sending every 3rd frame (with replay after completion).")
+                print(f"[DEBUG] Frame streaming active! Sending every 5th frame with dual cameras (wrist + free).")
 
-            if is_replaying:
-                # Send recorded frame from replay buffer
-                if replay_index < len(recorded_frames):
-                    frame_data = recorded_frames[replay_index]
-                    threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
-                    replay_index += 1
-                    time.sleep(0.033)  # ~30 FPS replay
-                else:
-                    # Loop replay
-                    replay_index = 0
-            elif frame_counter % 3 == 0:  # Every 3rd frame during live execution
-                frame_data = _capture_viewer_frame(model, data, camera="hand_camera")
-                if frame_data:
+            if not is_replaying and frame_counter % 5 == 0:  # Every 5th frame during live execution
+                # Capture BOTH cameras
+                wrist_frame = _capture_viewer_frame(model, data, camera="hand_camera")
+                free_frame = _capture_viewer_frame(model, data, camera=-1)  # Free camera
+
+                if wrist_frame and free_frame:
+                    # Combine both frames into one JSON payload
+                    import json
+                    dual_frame_data = json.dumps({
+                        "wrist": wrist_frame,
+                        "free": free_frame
+                    })
                     if frame_counter <= 15:  # Only log first few
-                        print(f"[Frame] Captured and sending to {http_base}/api/sim/frame")
-                    # Send frame
-                    threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, frame_data)), daemon=True).start()
-                    # Record frame for replay
+                        print(f"[Frame] Captured dual cameras and sending to {http_base}/api/sim/frame")
+                    # Send combined frame
+                    threading.Thread(target=lambda: asyncio.run(_send_frame_to_backend(http_base, dual_frame_data)), daemon=True).start()
+                    # Record for replay
                     if is_recording:
-                        recorded_frames.append(frame_data)
-                elif frame_counter == 3:
+                        recorded_frames.append(dual_frame_data)
+                elif frame_counter == 5:
                     print("[Frame] WARNING: Frame capture failed - EGL rendering may not be working")
 
         dt = model.opt.timestep

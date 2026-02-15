@@ -54,6 +54,18 @@ async def broadcast_frame(frame_data: str):
         viewer_subscribers.discard(ws)
 
 
+async def broadcast_video_ready(video_url: str):
+    """Broadcast notification that a replay video is ready."""
+    dead = set()
+    for ws in viewer_subscribers:
+        try:
+            await ws.send_text(json.dumps({"type": "video_ready", "video_url": video_url}))
+        except Exception:
+            dead.add(ws)
+    for ws in dead:
+        viewer_subscribers.discard(ws)
+
+
 # IMPORTANT: /ws/sim MUST be defined BEFORE /ws/{order_id} to avoid route conflict
 @router.websocket("/ws/sim")
 async def sim_websocket(websocket: WebSocket):
