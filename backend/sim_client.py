@@ -534,27 +534,17 @@ async def _send_wrist_image_to_backend(http_base: str, order_id: str, image_byte
         return False
 
 
-def _capture_viewer_frame(model, data, camera=-1):
-    """Render one frame from the free camera with custom settings."""
+def _capture_viewer_frame(model, data, camera="hand_camera"):
+    """Render one frame from specified camera."""
     if model is None or data is None:
         return None
     try:
         import base64
         width, height = 480, 360  # Smaller for faster streaming
 
-        # Create renderer and camera
+        # Create renderer and render from camera
         renderer = mujoco.Renderer(model, height=height, width=width)
-
-        # Set up camera view (user-configured)
-        scene_option = mujoco.MjvOption()
-        cam = mujoco.MjvCamera()
-        cam.lookat[:] = [0.00, 0.00, 0.35]
-        cam.distance = 2.94
-        cam.azimuth = 135.0
-        cam.elevation = -25.0
-
-        # Render with custom camera
-        renderer.update_scene(data, camera=camera, scene_option=scene_option)
+        renderer.update_scene(data, camera=camera)
         pixels = renderer.render()
         if pixels is None or pixels.size == 0:
             return None
@@ -842,12 +832,12 @@ def _run_headless(controller, model, data, http_base: str = None, enable_web_str
         controller.update_held_object()
         mujoco.mj_step(model, data)
 
-        # Send frames to web viewers (every 5th frame)
+        # Send frames to web viewers (every 3rd frame)
         if enable_web_streaming and http_base:
             frame_counter += 1
             if frame_counter == 1:
-                print(f"[DEBUG] Frame streaming active! Sending every 5th frame.")
-            if frame_counter % 5 == 0:  # Every 5th frame
+                print(f"[DEBUG] Frame streaming active! Sending every 3rd frame.")
+            if frame_counter % 3 == 0:  # Every 3rd frame
                 frame_data = _capture_viewer_frame(model, data, camera=-1)
                 if frame_data:
                     if frame_counter <= 15:  # Only log first few
